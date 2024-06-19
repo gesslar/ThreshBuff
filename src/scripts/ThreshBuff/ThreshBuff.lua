@@ -1,3 +1,5 @@
+-- ThreshBuff
+
 ThreshBuff = ThreshBuff or {}
 ThreshBuff.appName = "ThreshBuff"
 ThreshBuff.Timer = nil
