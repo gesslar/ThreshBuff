@@ -1,0 +1,8 @@
+{
+  "package": "ThreshBuff",
+  "version": "1.0.0",
+  "author": "Gesslar@ThresholdRPG",
+  "title": "Threshold Buff/Debuff Package for Mudlet",
+  "outputFile": true,
+  "icon": "griffon-right.jpg"
+}
