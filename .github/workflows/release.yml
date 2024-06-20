@@ -13,10 +13,6 @@ jobs:
     steps:
       - uses: actions/checkout@v3.3.0
 
-      - name: Copy mfile to release.json
-        run: |
-          cp ./mfile ./release.json
-
       - name: JSON to variables
         # see https://github.com/antifree/json-to-variables
         # You may pin to the exact commit or the version.
@@ -24,7 +20,7 @@ jobs:
         uses: antifree/json-to-variables@v1.2.0
         with:
           # The json file.
-          filename: "./release.json"
+          filename: "./mfile"
           # The prefix for variables.
           prefix: "mfile"
 
