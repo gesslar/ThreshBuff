@@ -3,5 +3,10 @@
         "name": "ThreshBuff",
         "isActive": "yes",
         "eventHandlerList": []
+    },
+    {
+        "name": "Updater",
+        "isActive": "yes",
+        "eventHandlerList": []
     }
 ]
