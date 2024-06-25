@@ -5,19 +5,30 @@ __PKGNAME__.Debuffs = __PKGNAME__.Debuffs or {}
 __PKGNAME__.Afflictions = __PKGNAME__.Afflictions or {}
 __PKGNAME__.UpperGutter = 0
 __PKGNAME__.EventHandlers = {
-    {"gmcp.Char.Afflictions.Add", "__PKGNAME__:Add", nil},
-    {"gmcp.Char.Afflictions.Remove", "__PKGNAME__:Remove", nil},
-    {"gmcp.Char.Afflictions.List", "__PKGNAME__:List", nil},
-    {"gmcp.Char.Buffs.Add", "__PKGNAME__:Add", nil},
-    {"gmcp.Char.Buffs.Remove", "__PKGNAME__:Remove", nil},
-    {"gmcp.Char.Buffs.List", "__PKGNAME__:List", nil},
-    {"gmcp.Char.Debuffs.Add", "__PKGNAME__:Add", nil},
-    {"gmcp.Char.Debuffs.Remove", "__PKGNAME__:Remove", nil},
-    {"gmcp.Char.Debuffs.List", "__PKGNAME__:List", nil},
+    {"gmcp.Char.Afflictions.Add", "__PKGNAME__:Add"},
+    {"gmcp.Char.Afflictions.Remove", "__PKGNAME__:Remove"},
+    {"gmcp.Char.Afflictions.List", "__PKGNAME__:List"},
+    {"gmcp.Char.Buffs.Add", "__PKGNAME__:Add"},
+    {"gmcp.Char.Buffs.Remove", "__PKGNAME__:Remove"},
+    {"gmcp.Char.Buffs.List", "__PKGNAME__:List"},
+    {"gmcp.Char.Debuffs.Add", "__PKGNAME__:Add"},
+    {"gmcp.Char.Debuffs.Remove", "__PKGNAME__:Remove"},
+    {"gmcp.Char.Debuffs.List", "__PKGNAME__:List"},
 }
 __PKGNAME__.Colors = {
     buff = "<0,137,0:0,0,0,0>", debuff = "<255,59,59:0,0,0,0>", affliction = "<147,112,219:0,0,0,0>"
 }
+__PKGNAME__.Widgets = {}
+
+function __PKGNAME__:AddWidget(widget)
+    for _, v in ipairs(self.Widgets) do
+        if v == widget then
+            return
+        end
+    end
+
+    table.insert(self.Widgets, widget)
+end
 
 function __PKGNAME__:CopyTable(orig)
     local orig_type = type(orig)
@@ -49,65 +60,79 @@ function __PKGNAME__:Capitalize(str)
     return (str:gsub("^%l", string.upper))
 end
 
-__PKGNAME__.MainWindow = __PKGNAME__.MainWindow or Adjustable.Container:new({
-    name = "__PKGNAME__.MainWindow",
-    x = 15, y = 15, width = "57c", height = "3c",
-    padding = 0, fontSize = 10, titleText = "",
-    adjLabelstyle = "background-color: rgba(50,50,50,100%); border: 0px; border-radius: 5px;",
-    buttonstyle = [[
-        QLabel{ border-radius: 1px; background-color: rgba(0,0,0,0%);}
-        QLabel::hover{ background-color: rgba(0,0,0,0%);}
-    ]],
-})
+function __PKGNAME__:BuildUI()
+    self.MainWindow = self.MainWindow or Adjustable.Container:new({
+        name = "__PKGNAME__.MainWindow",
+        x = 15, y = 15, width = "57c", height = "3c",
+        padding = 0, fontSize = 10, titleText = "",
+        adjLabelstyle = "background-color: rgba(50,50,50,100%); border: 0px; border-radius: 5px;",
+        buttonstyle = [[
+            QLabel{ border-radius: 1px; background-color: rgba(0,0,0,0%);}
+            QLabel::hover{ background-color: rgba(0,0,0,0%);}
+        ]],
+    })
+    self.MainWindow:show()
+    self:AddWidget(self.MainWindow)
 
-__PKGNAME__.MainWindow:show()
-__PKGNAME__.Container = __PKGNAME__.Container or Geyser.Container:new({
-    name = "__PKGNAME__.Container",
-    x = "0%", y = "0%", width = "100%", height = "100%"
-}, __PKGNAME__.MainWindow)
+    self.Container = self.Container or Geyser.Container:new({
+        name = "__PKGNAME__.Container",
+        x = "0%", y = "0%", width = "100%", height = "100%"
+    }, self.MainWindow)
+    self:AddWidget(__PKGNAME__.Container)
 
-__PKGNAME__.BorderLabel = __PKGNAME__.BorderLabel or Geyser.Label:new({
-    name = "__PKGNAME__.BorderLabel",
-    x = 1, y = 1, width = -1, height = -1
-}, __PKGNAME__.Container)
+    self.BorderLabel = self.BorderLabel or Geyser.Label:new({
+        name = "__PKGNAME__.BorderLabel",
+        x = 1, y = 1, width = -1, height = -1
+    }, self.Container)
 
-__PKGNAME__.BorderLabel:setStyleSheet([[
-    background-color: rgba(50,50,50,100%);border: 1px solid grey;border-radius:5px;
-]])
+    self.BorderLabel:setStyleSheet([[
+        background-color: rgba(50,50,50,100%);border: 1px solid grey;border-radius:5px;
+    ]])
+    self.BorderLabel:enableClickthrough()
+    self:AddWidget(self.BorderLabel)
 
-__PKGNAME__.BorderLabel:enableClickthrough()
-__PKGNAME__.Display = __PKGNAME__.Display or Geyser.MiniConsole:new({
-    name = "__PKGNAME__.Display",
-    x = 7, y = 27, width = -7, height = -2,
-    autoWrap = false,
-    color = "black",
-    scrollBar = false,
-    fontSize = 10,
-    font = "Fixedsys",
-}, __PKGNAME__.Container)
+    self.Display = self.Display or Geyser.MiniConsole:new({
+        name = "__PKGNAME__.Display",
+        x = 7, y = 27, width = -7, height = -2,
+        autoWrap = false,
+        color = "black",
+        scrollBar = false,
+        fontSize = 10,
+        font = "Fixedsys",
+    }, self.Container)
 
-__PKGNAME__.Display:setColor(50, 50, 50)
+    __PKGNAME__.Display:setColor(50, 50, 50)
+    self:AddWidget(self.Display)
 
-__PKGNAME__.TitleLabel = __PKGNAME__.TitleLabel or Geyser.Label:new({
-    name = "__PKGNAME__.TitleLabel",
-    x = 8, y = 8, width = "100%-100", height = 18,
-    fgColor = "ansiLightBlack",
-    font = "Lucida Console",
-    fontSize = 10,
-    message = [[THRESHOLD BUFFS AND DEBUFFS]],
-}, __PKGNAME__.Container)
+    self.TitleLabel = self.TitleLabel or Geyser.Label:new({
+        name = "__PKGNAME__.TitleLabel",
+        x = 8, y = 8, width = "100%-100", height = 18,
+        fgColor = "ansiLightBlack",
+        font = "Lucida Console",
+        fontSize = 10,
+        message = [[THRESHOLD BUFFS AND DEBUFFS]],
+    }, self.Container)
 
-__PKGNAME__.TitleLabel:enableClickthrough()
-__PKGNAME__.TitleLabel:setStyleSheet([[
-    background-color: rgba(0,0,0,0%);
-    qproperty-alignment: AlignVCenter;
-]])
+    self.TitleLabel:enableClickthrough()
+    self.TitleLabel:setStyleSheet([[
+        background-color: rgba(0,0,0,0%);
+        qproperty-alignment: AlignVCenter;
+    ]])
+    self:AddWidget(self.TitleLabel)
+end
+
+function __PKGNAME__:DismantleUI()
+    for _, v in ipairs(self.Widgets) do
+        v:hide()
+        v = nil
+    end
+end
 
 function __PKGNAME__:Stringify(buff)
     local name = buff.name
     name = self:Capitalize(name)
     if buff.expires == math.huge then
-        return f"{name} (???)"
+        return name .. " (???)"
     end
     local remaining = buff.expires - os.time()
     local result
@@ -174,46 +199,63 @@ function __PKGNAME__:Sorter(elem1, elem2)
     return elem1.expires < elem2.expires
 end
 
-function __PKGNAME__:Add(ev,pkg)
-    local class, label, storage, packageTable, temp, btype
+function __PKGNAME__:GetPackageInfo(pkg)
+    local info
 
-    if pkg == "gmcp.Char.Buffs.Add" then
-        class = "Buffs"
-        label = "buff_id"
-        btype = "buff"
-    elseif pkg == "gmcp.Char.Debuffs.Add" then
-        class = "Debuffs"
-        label = "debuff_id"
-        btype = "debuff"
-    elseif pkg == "gmcp.Char.Afflictions.Add" then
-        class = "Afflictions"
-        label = "name"
-        btype = "affliction"
+    local package_type = string.match(pkg, "gmcp%.Char%.(%a+)%.")
+
+    if package_type == "Buffs" then
+        info = {
+            class = "Buffs",
+            label = "buff_id",
+            buff_type = "buff",
+        }
+    elseif package_type == "Debuffs" then
+        info = {
+            class = "Debuffs",
+            label = "debuff_id",
+            buff_type = "debuff",
+        }
+    elseif package_type == "Afflictions" then
+        info = {
+            class = "Afflictions",
+            label = "name",
+            buff_type = "affliction",
+        }
     else
-        return
+        return nil
     end
 
-    packageTable = gmcp.Char[class].Add
-    if btype == "affliction" then
+    return info
+end
+
+function __PKGNAME__:Add(event, _)
+    local storage, packageTable, temp
+
+    local info = self:GetPackageInfo(event)
+    if info == nil then return end
+
+    packageTable = gmcp.Char[info.class].Add
+    if info.buff_type == "affliction" then
         temp = {
             name = packageTable[1],
             id = packageTable[1],
             expires = tonumber(packageTable[2]),
-            btype = btype,
+            btype = info.buff_type
         }
     else
         temp = {
             name = packageTable.name,
-            id = packageTable[label],
+            id = packageTable[info.label],
             expires = tonumber(packageTable["expires"]),
-            btype = btype,
+            btype = info.buff_type
         }
     end
 
     if temp.expires == -1 then
         temp.expires = math.huge
     end
-    storage = self[class]
+    storage = self[info.class]
 
     storage[#storage + 1] = temp
     if #storage > 1 then
@@ -223,21 +265,14 @@ function __PKGNAME__:Add(ev,pkg)
     self:ToggleUpdater()
 end
 
-function __PKGNAME__:Remove(evt,pkg)
-    local id, class, storage
+function __PKGNAME__:Remove(event, _)
+    local id, storage, info
 
-    if pkg == "gmcp.Char.Buffs.Remove" then
-        class = "Buffs"
-    elseif pkg == "gmcp.Char.Debuffs.Remove" then
-        class = "Debuffs"
-    elseif pkg == "gmcp.Char.Afflictions.Remove" then
-        class = "Afflictions"
-    else
-        return
-    end
+    info = self:GetPackageInfo(event)
+    if info == nil then return end
 
-    storage = self[class]
-    id = gmcp.Char[class].Remove
+    storage = self[info.class]
+    id = gmcp.Char[info.class].Remove
     for remove_package, v in pairs(storage) do
         if v.id == id then
             table.remove(storage, remove_package)
@@ -252,39 +287,27 @@ function __PKGNAME__:Remove(evt,pkg)
     self:ToggleUpdater()
 end
 
-function __PKGNAME__:List(evt,pkg)
-    local class, storage, label, btype, packageTable
+function __PKGNAME__:List(event, _)
+    local storage, packageTable, info
 
-    if pkg == "gmcp.Char.Buffs.List" then
-        class = "Buffs"
-        label = "buff_id"
-        btype = "buff"
-    elseif pkg == "gmcp.Char.Debuffs.List" then
-        class = "Debuffs"
-        label = "debuff_id"
-        btype = "debuff"
-    elseif pkg == "gmcp.Char.Afflictions.List" then
-        class = "Afflictions"
-        label = "name"
-        btype = "affliction"
-    else
-        return
-    end
+    info = self:GetPackageInfo(event)
 
-    packageTable = gmcp.Char[class].List
-    self[class] = {}
-    storage = self[class]
+    if info == nil then return end
 
-    if btype == "affliction" then
+    packageTable = gmcp.Char[info.class].List
+    self[info.class] = {}
+    storage = self[info.class]
+
+    if info.buff_type == "affliction" then
         for name, expires in pairs(packageTable) do
-            storage[#storage + 1] = {id = name, name = name, expires = tonumber(expires), btype = btype}
+            storage[#storage + 1] = {id = name, name = name, expires = tonumber(expires), btype = info.buff_type}
             if storage[#storage].expires == -1 then
                 storage[#storage].expires = math.huge
             end
         end
     else
         for id, details in pairs(packageTable) do
-            storage[#storage + 1] = {id = id, name = details.name, expires = tonumber(details.expires), btype = btype}
+            storage[#storage + 1] = {id = id, name = details.name, expires = tonumber(details.expires), btype = info.buff_type}
             if storage[#storage].expires == -1 then
                 storage[#storage].expires = math.huge
             end
@@ -303,33 +326,47 @@ function __PKGNAME__:ConnectionScript()
     self:RegisterEventHandlers()
 
     if self.ConnectionTimer == nil then
-        registerNamedTimer(self.AppName, "AnnounceGMCP", 1, function() self:AnnounceGMCP() end)
+        registerNamedTimer(self.AppName, "AnnounceGMCP", 1, function()
+            sendGMCP([[
+                Core.Supports.Add ["Char 1", "Char.Buffs 1", "Char.Debuffs 1", "Char.Afflictions 1", "Char.Reset 1"]
+            ]])
+            deleteNamedTimer(__PKGNAME__.AppName, "AnnounceGMCP")
+        end)
     end
 end
 
-function __PKGNAME__:AnnounceGMCP()
-    sendGMCP([[
-        Core.Supports.Add ["Char 1", "Char.Buffs 1", "Char.Debuffs 1", "Char.Afflictions 1", "Char.Reset 1"]
-    ]])
-    deleteNamedTimer(__PKGNAME__.AppName, "AnnounceGMCP")
-end
-
-registerNamedEventHandler(__PKGNAME__.AppName, "__PKGNAME__Connect", "sysConnectionEvent", function() __PKGNAME__:ConnectionScript() end, false)
+registerNamedEventHandler(__PKGNAME__.AppName,
+    "__PKGNAME__Connect",
+    "sysConnectionEvent",
+    function()
+        __PKGNAME__:ConnectionScript()
+    end,
+    false
+)
 
 function __PKGNAME__:Install(_, package)
     if package == self.AppName then
         self:ConnectionScript()
+        self:BuildUI()
         print("Thank you for installing __PKGNAME__!\nInitializing GMCP in Threshold.\n")
         tempTimer(1, function() send("gmcp reset", false) end)
     end
 end
-__PKGNAME__.installHandler = registerNamedEventHandler(__PKGNAME__.AppName, "__PKGNAME__InstallHandler", "sysInstallPackage", function(_, package) __PKGNAME__:Install(_, package) end, true)
+__PKGNAME__.installHandler = registerNamedEventHandler(
+    __PKGNAME__.AppName,
+    "__PKGNAME__InstallHandler",
+    "sysInstallPackage",
+    function(_, package)
+        __PKGNAME__:Install(_, package)
+    end,
+    true
+)
 
 function __PKGNAME__:Uninstall(event, package)
     self:DeregisterEventHandlers()
     if package == self.AppName then
         deleteNamedTimer(__PKGNAME__.AppName, "UpdateTimer")
-        self.MainWindow:hide()
+        self:DismantleUI()
         self.Timer = false
         self:ClearSelf()
 
@@ -343,5 +380,23 @@ function __PKGNAME__:ClearSelf()
     end
 end
 
-__PKGNAME__.uninstallHandler = registerNamedEventHandler(
-    __PKGNAME__.AppName, "__PKGNAME__UninstallHandler", "sysUninstallPackage", function(event, package) __PKGNAME__:Uninstall(event, package) end, true)
+registerNamedEventHandler(
+    __PKGNAME__.AppName,
+    "__PKGNAME__UninstallHandler",
+    "sysUninstallPackage",
+    function(event, package)
+        __PKGNAME__:Uninstall(event, package)
+    end,
+    true
+)
+
+registerNamedEventHandler(
+    __PKGNAME__.AppName,
+    "__PKGNAME__Load",
+    "sysLoadEvent",
+    function()
+        __PKGNAME__:DismantleUI()
+        __PKGNAME__:BuildUI()
+    end,
+    true
+)
