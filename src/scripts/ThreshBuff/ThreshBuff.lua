@@ -111,7 +111,7 @@ function ThreshBuff:Stringify(buff)
     local name = buff.name
     name = self:Capitalize(name)
     if buff.expires == math.huge then
-        return name .. " (???)"
+        return f"{name} (???)"
     end
     local remaining = buff.expires - os.time()
     local result
