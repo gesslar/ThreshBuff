@@ -1,27 +1,25 @@
--- ThreshBuff
-
-ThreshBuff = ThreshBuff or {}
-ThreshBuff.AppName = "ThreshBuff"
-ThreshBuff.Buffs = ThreshBuff.Buffs or {}
-ThreshBuff.Debuffs = ThreshBuff.Debuffs or {}
-ThreshBuff.Afflictions = ThreshBuff.Afflictions or {}
-ThreshBuff.UpperGutter = 0
-ThreshBuff.EventHandlers = {
-    {"gmcp.Char.Afflictions.Add", "ThreshBuff:Add", nil},
-    {"gmcp.Char.Afflictions.Remove", "ThreshBuff:Remove", nil},
-    {"gmcp.Char.Afflictions.List", "ThreshBuff:List", nil},
-    {"gmcp.Char.Buffs.Add", "ThreshBuff:Add", nil},
-    {"gmcp.Char.Buffs.Remove", "ThreshBuff:Remove", nil},
-    {"gmcp.Char.Buffs.List", "ThreshBuff:List", nil},
-    {"gmcp.Char.Debuffs.Add", "ThreshBuff:Add", nil},
-    {"gmcp.Char.Debuffs.Remove", "ThreshBuff:Remove", nil},
-    {"gmcp.Char.Debuffs.List", "ThreshBuff:List", nil},
+__PKGNAME__ = __PKGNAME__ or {}
+__PKGNAME__.AppName = "__PKGNAME__"
+__PKGNAME__.Buffs = __PKGNAME__.Buffs or {}
+__PKGNAME__.Debuffs = __PKGNAME__.Debuffs or {}
+__PKGNAME__.Afflictions = __PKGNAME__.Afflictions or {}
+__PKGNAME__.UpperGutter = 0
+__PKGNAME__.EventHandlers = {
+    {"gmcp.Char.Afflictions.Add", "__PKGNAME__:Add", nil},
+    {"gmcp.Char.Afflictions.Remove", "__PKGNAME__:Remove", nil},
+    {"gmcp.Char.Afflictions.List", "__PKGNAME__:List", nil},
+    {"gmcp.Char.Buffs.Add", "__PKGNAME__:Add", nil},
+    {"gmcp.Char.Buffs.Remove", "__PKGNAME__:Remove", nil},
+    {"gmcp.Char.Buffs.List", "__PKGNAME__:List", nil},
+    {"gmcp.Char.Debuffs.Add", "__PKGNAME__:Add", nil},
+    {"gmcp.Char.Debuffs.Remove", "__PKGNAME__:Remove", nil},
+    {"gmcp.Char.Debuffs.List", "__PKGNAME__:List", nil},
 }
-ThreshBuff.Colors = {
+__PKGNAME__.Colors = {
     buff = "<0,137,0:0,0,0,0>", debuff = "<255,59,59:0,0,0,0>", affliction = "<147,112,219:0,0,0,0>"
 }
 
-function ThreshBuff:CopyTable(orig)
+function __PKGNAME__:CopyTable(orig)
     local orig_type = type(orig)
     local copy
     if orig_type == 'table' then
@@ -35,26 +33,24 @@ function ThreshBuff:CopyTable(orig)
     return copy
 end
 
-function ThreshBuff:RegisterEventHandlers()
-    for i, v in ipairs(self.EventHandlers) do
-        self.EventHandlers[i][3] = registerNamedEventHandler(self.AppName, v[1], v[1], v[2], false)
+function __PKGNAME__:RegisterEventHandlers()
+    for _, v in ipairs(self.EventHandlers) do
+        registerNamedEventHandler(self.AppName, v[1], v[1], v[2], false)
     end
 end
 
-function ThreshBuff:DeregisterEventHandlers()
-    for i, v in ipairs(self.EventHandlers) do
-        if v[3] ~= nil then
-            deleteNamedEventHandler(self.AppName, v[1])
-        end
+function __PKGNAME__:DeregisterEventHandlers()
+    for _, v in ipairs(self.EventHandlers) do
+        deleteNamedEventHandler(self.AppName, v[1])
     end
 end
 
-function ThreshBuff:Capitalize(str)
+function __PKGNAME__:Capitalize(str)
     return (str:gsub("^%l", string.upper))
 end
 
-ThreshBuff.MainWindow = ThreshBuff.MainWindow or Adjustable.Container:new({
-    name = "ThreshBuff.MainWindow",
+__PKGNAME__.MainWindow = __PKGNAME__.MainWindow or Adjustable.Container:new({
+    name = "__PKGNAME__.MainWindow",
     x = 15, y = 15, width = "57c", height = "3c",
     padding = 0, fontSize = 10, titleText = "",
     adjLabelstyle = "background-color: rgba(50,50,50,100%); border: 0px; border-radius: 5px;",
@@ -64,50 +60,50 @@ ThreshBuff.MainWindow = ThreshBuff.MainWindow or Adjustable.Container:new({
     ]],
 })
 
-ThreshBuff.MainWindow:show()
-ThreshBuff.Container = ThreshBuff.Container or Geyser.Container:new({
-    name = "ThreshBuff.Container",
+__PKGNAME__.MainWindow:show()
+__PKGNAME__.Container = __PKGNAME__.Container or Geyser.Container:new({
+    name = "__PKGNAME__.Container",
     x = "0%", y = "0%", width = "100%", height = "100%"
-}, ThreshBuff.MainWindow)
+}, __PKGNAME__.MainWindow)
 
-ThreshBuff.BorderLabel = ThreshBuff.BorderLabel or Geyser.Label:new({
-    name = "ThreshBuff.BorderLabel",
+__PKGNAME__.BorderLabel = __PKGNAME__.BorderLabel or Geyser.Label:new({
+    name = "__PKGNAME__.BorderLabel",
     x = 1, y = 1, width = -1, height = -1
-}, ThreshBuff.Container)
+}, __PKGNAME__.Container)
 
-ThreshBuff.BorderLabel:setStyleSheet([[
+__PKGNAME__.BorderLabel:setStyleSheet([[
     background-color: rgba(50,50,50,100%);border: 1px solid grey;border-radius:5px;
 ]])
 
-ThreshBuff.BorderLabel:enableClickthrough()
-ThreshBuff.Display = ThreshBuff.Display or Geyser.MiniConsole:new({
-    name = "ThreshBuff.Display",
+__PKGNAME__.BorderLabel:enableClickthrough()
+__PKGNAME__.Display = __PKGNAME__.Display or Geyser.MiniConsole:new({
+    name = "__PKGNAME__.Display",
     x = 7, y = 27, width = -7, height = -2,
     autoWrap = false,
     color = "black",
     scrollBar = false,
     fontSize = 10,
     font = "Fixedsys",
-}, ThreshBuff.Container)
+}, __PKGNAME__.Container)
 
-ThreshBuff.Display:setColor(50, 50, 50)
+__PKGNAME__.Display:setColor(50, 50, 50)
 
-ThreshBuff.TitleLabel = ThreshBuff.TitleLabel or Geyser.Label:new({
-    name = "ThreshBuff.TitleLabel",
+__PKGNAME__.TitleLabel = __PKGNAME__.TitleLabel or Geyser.Label:new({
+    name = "__PKGNAME__.TitleLabel",
     x = 8, y = 8, width = "100%-100", height = 18,
     fgColor = "ansiLightBlack",
     font = "Lucida Console",
     fontSize = 10,
     message = [[THRESHOLD BUFFS AND DEBUFFS]],
-}, ThreshBuff.Container)
+}, __PKGNAME__.Container)
 
-ThreshBuff.TitleLabel:enableClickthrough()
-ThreshBuff.TitleLabel:setStyleSheet([[
+__PKGNAME__.TitleLabel:enableClickthrough()
+__PKGNAME__.TitleLabel:setStyleSheet([[
     background-color: rgba(0,0,0,0%);
     qproperty-alignment: AlignVCenter;
 ]])
 
-function ThreshBuff:Stringify(buff)
+function __PKGNAME__:Stringify(buff)
     local name = buff.name
     name = self:Capitalize(name)
     if buff.expires == math.huge then
@@ -133,7 +129,7 @@ function ThreshBuff:Stringify(buff)
     return name .. " " .. result
 end
 
-function ThreshBuff:ToggleUpdater()
+function __PKGNAME__:ToggleUpdater()
     if #self.Buffs == 0 and #self.Debuffs == 0 and #self.Afflictions == 0 then
         stopNamedTimer(self.AppName, "UpdateTimer")
     else
@@ -145,7 +141,7 @@ function ThreshBuff:ToggleUpdater()
     self:UpdateDisplay()
 end
 
-function ThreshBuff:ResizeConsole(num)
+function __PKGNAME__:ResizeConsole(num)
     if num == 0 or num == nil then
         num = 2
     else
@@ -155,7 +151,7 @@ function ThreshBuff:ResizeConsole(num)
     self.MainWindow:resize(nil, height)
 end
 
-function ThreshBuff:UpdateDisplay()
+function __PKGNAME__:UpdateDisplay()
     self.Display:clear()
 
     local tables = { self.Buffs, self.Debuffs, self.Afflictions }
@@ -174,11 +170,11 @@ function ThreshBuff:UpdateDisplay()
     self:ResizeConsole(num)
 end
 
-function ThreshBuff:Sorter(elem1, elem2)
+function __PKGNAME__:Sorter(elem1, elem2)
     return elem1.expires < elem2.expires
 end
 
-function ThreshBuff:Add(ev,pkg)
+function __PKGNAME__:Add(ev,pkg)
     local class, label, storage, packageTable, temp, btype
 
     if pkg == "gmcp.Char.Buffs.Add" then
@@ -227,7 +223,7 @@ function ThreshBuff:Add(ev,pkg)
     self:ToggleUpdater()
 end
 
-function ThreshBuff:Remove(evt,pkg)
+function __PKGNAME__:Remove(evt,pkg)
     local id, class, storage
 
     if pkg == "gmcp.Char.Buffs.Remove" then
@@ -256,8 +252,8 @@ function ThreshBuff:Remove(evt,pkg)
     self:ToggleUpdater()
 end
 
-function ThreshBuff:List(evt,pkg)
-    local class, storage, label, btype
+function __PKGNAME__:List(evt,pkg)
+    local class, storage, label, btype, packageTable
 
     if pkg == "gmcp.Char.Buffs.List" then
         class = "Buffs"
@@ -302,7 +298,7 @@ function ThreshBuff:List(evt,pkg)
     self:ToggleUpdater()
 end
 
-function ThreshBuff:ConnectionScript()
+function __PKGNAME__:ConnectionScript()
     self:DeregisterEventHandlers()
     self:RegisterEventHandlers()
 
@@ -311,40 +307,41 @@ function ThreshBuff:ConnectionScript()
     end
 end
 
-function ThreshBuff:AnnounceGMCP()
+function __PKGNAME__:AnnounceGMCP()
     sendGMCP([[
         Core.Supports.Add ["Char 1", "Char.Buffs 1", "Char.Debuffs 1", "Char.Afflictions 1", "Char.Reset 1"]
     ]])
-    deleteNamedTimer(ThreshBuff.AppName, "AnnounceGMCP")
+    deleteNamedTimer(__PKGNAME__.AppName, "AnnounceGMCP")
 end
 
-registerNamedEventHandler(ThreshBuff.AppName, "ThreshBuffConnect", "sysConnectionEvent", function() ThreshBuff:ConnectionScript() end, false)
+registerNamedEventHandler(__PKGNAME__.AppName, "__PKGNAME__Connect", "sysConnectionEvent", function() __PKGNAME__:ConnectionScript() end, false)
 
-function ThreshBuff:Install(_, package)
+function __PKGNAME__:Install(_, package)
     if package == self.AppName then
         self:ConnectionScript()
-        print("Thank you for installing ThreshBuff!\nInitializing GMCP in Threshold.\n")
+        print("Thank you for installing __PKGNAME__!\nInitializing GMCP in Threshold.\n")
         tempTimer(1, function() send("gmcp reset", false) end)
     end
 end
-ThreshBuff.installHandler = registerNamedEventHandler(ThreshBuff.AppName, "ThreshBuffInstallHandler", "sysInstallPackage", function(_, package) ThreshBuff:Install(_, package) end, true)
+__PKGNAME__.installHandler = registerNamedEventHandler(__PKGNAME__.AppName, "__PKGNAME__InstallHandler", "sysInstallPackage", function(_, package) __PKGNAME__:Install(_, package) end, true)
 
-function ThreshBuff:Uninstall(event, package)
+function __PKGNAME__:Uninstall(event, package)
     self:DeregisterEventHandlers()
     if package == self.AppName then
-        deleteNamedTimer(ThreshBuff.AppName, "UpdateTimer")
+        deleteNamedTimer(__PKGNAME__.AppName, "UpdateTimer")
         self.MainWindow:hide()
         self.Timer = false
         self:ClearSelf()
 
-        cecho("\n<red>You have uninstalled ThreshBuff.\n")
+        cecho("\n<red>You have uninstalled __PKGNAME__.\n")
     end
 end
 
-function ThreshBuff:ClearSelf()
+function __PKGNAME__:ClearSelf()
     for k in pairs(self) do
         self[k] = nil
     end
 end
 
-ThreshBuff.uninstallHandler = registerNamedEventHandler(ThreshBuff.AppName, "ThreshBuffUninstallHandler", "sysUninstallPackage", function(event, package) ThreshBuff:Uninstall(event, package) end, true)
+__PKGNAME__.uninstallHandler = registerNamedEventHandler(
+    __PKGNAME__.AppName, "__PKGNAME__UninstallHandler", "sysUninstallPackage", function(event, package) __PKGNAME__:Uninstall(event, package) end, true)
