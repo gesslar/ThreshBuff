@@ -1,0 +1,12 @@
+[
+  {
+    "name": "BuffItem",
+    "isActive": "yes",
+    "eventHandlerList": []
+  },
+  {
+    "name": "ThreshBuff",
+    "isActive": "yes",
+    "eventHandlerList": []
+  }
+]
