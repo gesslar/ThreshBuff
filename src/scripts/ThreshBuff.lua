@@ -1,15 +1,17 @@
 -- Uninstall empties this table rather than dropping it, and the auto-updater
--- installs the new version in the same session, so a table left without an
--- AppName gets its defaults back just as a missing one would.
+-- installs the new version in the same session, so a table left without an ID
+-- manager gets its defaults back just as a missing one would. This keys off
+-- the ID manager because 1.x never had one: its one-shot uninstall handler
+-- could be used up by another package's uninstall, which left its whole table
+-- behind, AppName and old-format entries included, for this version to find.
 __PKGNAME__ = __PKGNAME__ or {}
 
-if __PKGNAME__.AppName == nil then
+if __PKGNAME__.idm == nil then
   for key, value in pairs({
     AppName = "__PKGNAME__",
     Buffs = {},
     Debuffs = {},
     Afflictions = {},
-    UpperGutter = 0,
     EventHandlers = {
       { "gmcp.Char.Afflictions.Add",    "__PKGNAME__:Add" },
       { "gmcp.Char.Afflictions.Remove", "__PKGNAME__:Remove" },
@@ -22,15 +24,15 @@ if __PKGNAME__.AppName == nil then
       { "gmcp.Char.Debuffs.List",       "__PKGNAME__:List" },
     },
     Colors = {
-      buff = "<chartreuse>",
-      debuff = "<tomato>",
-      affliction = "<orchid>"
+      buff = "chartreuse",
+      debuff = "tomato",
+      affliction = "orchid"
     },
     Widgets = {},
     Items = {},
     ItemSerial = 0,
-    glu = nil,
-    idm = getNewIDManager() or {}
+    UpdaterRunning = false,
+    idm = getNewIDManager()
   }) do
     __PKGNAME__[key] = value
   end
@@ -40,7 +42,6 @@ end
 function __PKGNAME__:SetupGlu()
   local instance = self.glu or require("__PKGNAME__/vendor/Glu-single")("__PKGNAME__")
 
-  instance.register(BuffItem)
   self.glu = instance
 
   return instance
@@ -54,10 +55,22 @@ local PanelStyle = [[
   ]]
 
 -- Transparent so the panel shows through, leaving the fade only the text.
-local ItemStyle = [[
+local RowStyle = [[
+    background-color: transparent;
+  ]]
+
+local NameStyle = [[
     background-color: transparent;
     padding-left: 4px;
   ]]
+
+local TimeStyle = [[
+    background-color: transparent;
+    padding-left: 4px;
+  ]]
+
+local ItemFont = "Ubuntu"
+local ItemFontSize = 11
 
 function __PKGNAME__:AddWidget(widget)
   for _, v in ipairs(self.Widgets) do
@@ -81,15 +94,30 @@ function __PKGNAME__:DeregisterEventHandlers()
   end
 end
 
-function __PKGNAME__:BuildUI()
+--- Builds the UI. The window goes where it was last saved, once there has been
+--- a build for there to be a saved layout from. Restoring a layout that doesn't
+--- know the window would leave it where Mudlet puts new windows, on the right,
+--- and would move every other window back to the last save for nothing, so the
+--- first build, and a reset, dock it on the left instead.
+---
+---@param useDefaults boolean? Ignore the saved layout.
+function __PKGNAME__:BuildUI(useDefaults)
+  local marker = getMudletHomeDir() .. "/__PKGNAME__.layout"
+  local restore = not useDefaults and io.exists(marker)
+
   self.MainWindow = self.MainWindow or Geyser.UserWindow:new({
     name = "__PKGNAME__.MainWindow",
     docked = true,
     dockPosition = "left",
+    restoreLayout = restore,
     titleText = "__PKGNAME__ - " .. getProfileName(),
-    width = "50c"
   })
   self:AddWidget(self.MainWindow)
+
+  if not restore then
+    local file = io.open(marker, "w")
+    if file then file:close() end
+  end
 
   self.Container = self.Container or Geyser.Container:new({
     name = "__PKGNAME__.Container",
@@ -97,12 +125,14 @@ function __PKGNAME__:BuildUI()
     y = 0,
     width = "100%",
     height = "100%",
-    stylesheet = "background-color: red;"
   }, self.MainWindow)
-  self:AddWidget(__PKGNAME__.Container)
+  self:AddWidget(self.Container)
 
+  -- Not named BorderLabel: 1.x only ever hid its widgets, so during an in-session
+  -- upgrade a label of that name is still sitting in the main window, and Mudlet
+  -- would hand this one that widget instead of making a new one in the dock.
   self.BorderLabel = self.BorderLabel or Geyser.Label:new({
-    name = "__PKGNAME__.BorderLabel",
+    name = "__PKGNAME__.PanelLabel",
     x = 1,
     y = 1,
     width = -1,
@@ -113,57 +143,15 @@ function __PKGNAME__:BuildUI()
   self.BorderLabel:enableClickthrough()
   self:AddWidget(self.BorderLabel)
 
-  self.ScrollBox = self.ScrollBox or Geyser.ScrollBox:new({
-    name = "__PKGNAME__.ScrollBox",
+  self.ItemList = self.ItemList or Geyser.List:new({
+    name = "__PKGNAME__.ItemList",
     x = 1,
     y = 1,
     width = -1,
     height = -1,
+    sortBy = self.CompareItems,
   }, self.BorderLabel)
-  self:AddWidget(self.ScrollBox)
-
-  -- Mudlet's scroll box starts its content at the size of its parent window
-  -- and only re-fits it when a child moves, resizes, shows or hides. A Geyser
-  -- container has no widget to trigger that, so this invisible label does,
-  -- and keeps the content from being left at the old size once the last item
-  -- is deleted.
-  self.ScrollSpacer = self.ScrollSpacer or Geyser.Label:new({
-    name = "__PKGNAME__.ScrollSpacer",
-    x = 0,
-    y = 0,
-    width = 1,
-    height = 1,
-  }, self.ScrollBox)
-  self.ScrollSpacer:setStyleSheet("background-color: transparent;")
-  self.ScrollSpacer:enableClickthrough()
-
-  -- Sized to its items by FitItemBox rather than to the scroll box, so that
-  -- the scroll box gets something taller than itself to scroll. It stops
-  -- short of the right edge by a scrollbar's width, so the vertical scrollbar
-  -- never makes it too wide and brings in a horizontal one.
-  self.ItemBox = self.ItemBox or Geyser.VBox:new({
-    name = "__PKGNAME__.ItemBox",
-    x = 0,
-    y = 0,
-    width = -20,
-    height = 1,
-  }, self.ScrollBox)
-  self:AddWidget(self.ItemBox)
-  -- self.Display = self.Display or Geyser.MiniConsole:new({
-  --   name = "__PKGNAME__.Display",
-  --   x = 2,
-  --   y = 2,
-  --   width = -2,
-  --   height = -2,
-  --   autoWrap = false,
-  --   color = "black",
-  --   scrollBar = false,
-  --   fontSize = 12,
-  --   font = "Ubuntu Mono",
-  -- }, self.Container)
-
-  -- __PKGNAME__.Display:setColor(50, 50, 50)
-  -- self:AddWidget(self.Display)
+  self:AddWidget(self.ItemList)
 end
 
 --- Deletes the UI and forgets it, so the next BuildUI makes it afresh rather
@@ -179,20 +167,33 @@ function __PKGNAME__:DismantleUI()
   self.MainWindow = nil
   self.Container = nil
   self.BorderLabel = nil
-  self.ScrollBox = nil
-  self.ScrollSpacer = nil
-  self.ItemBox = nil
+  self.ItemList = nil
 end
 
-function __PKGNAME__:Stringify(buff)
-  local name = buff.name
-  local time = "(???)"
+--- Puts the window back on the left at its default size. Mudlet has no call to
+--- size a docked window, so the dock is made anew. That waits for the old one to
+--- go, which only happens once Mudlet is back in its event loop: a dock that
+--- arrives while the old one is there inherits its width when it leaves.
+function __PKGNAME__:ResetLayout()
+  self:DismantleUI()
 
-  if buff.expires ~= math.huge then
-    time = glu.date.shms(buff.expires - os.time(), true)
-  end
+  tempTimer(0, function()
+    -- Uninstall empties this table, methods included.
+    if not self.BuildUI then return end
 
-  return name .. ' <span style="color: white;">' .. time .. "</span>"
+    self:BuildUI(true)
+    self:UpdateDisplay()
+    cecho("\n<chartreuse>__PKGNAME__ window reset.\n")
+  end)
+end
+
+--- The time left on a buff, as it shows in its row.
+function __PKGNAME__:TimeLeft(buff)
+  if buff.expires == math.huge then return "(???)" end
+
+  -- UpdateDisplay read the clock earlier, so this one can be a second past
+  -- the expiry, and shms wraps negative seconds round to "23h 59m 59s".
+  return glu.date.shms(math.max(buff.expires - os.time(), 0), true)
 end
 
 function __PKGNAME__:ItemTag(id, expires)
@@ -203,48 +204,197 @@ function __PKGNAME__:ItemTag(id, expires)
   return string.format("__PKGNAME__.Item.%012.0f.%s", newExpires, id)
 end
 
---- Creates the item widget for a buff, or updates the text of the one it
---- already has, then re-sorts the box so items stay in expiry order.
+--- Fades both of a row's labels to transparent, each from its own colour, then
+--- calls `done`. Each step sets a label's stylesheet to its own followed by the
+--- faded text colour, so the rest of it, background included, stays as it is.
+---
+---@param item table The Geyser.ListItem to fade, with its `nameLabel` and `timeLabel`.
+---@param done function Called with no arguments once the fade completes.
+local function fadeOutItem(item, done)
+  local fades = {}
+
+  for _, label in ipairs({ item.nameLabel, item.timeLabel }) do
+    local base = label.stylesheet or ""
+    if base ~= "" and not base:match(";%s*$") then
+      base = base .. ";"
+    end
+
+    fades[#fades + 1] = { label = label, base = base, fg = { Geyser.Color.parse(label.fgColor) } }
+  end
+
+  local function set_alpha(alpha)
+    for _, fade in ipairs(fades) do
+      fade.fg[4] = alpha
+      fade.label:setStyleSheet(fade.base .. "color: rgba(" .. table.concat(fade.fg, ",") .. ");")
+    end
+  end
+
+  -- The stylesheet takes over the colour before the text stops carrying its
+  -- own, so the text never shows in the label's default colour.
+  set_alpha(255)
+  for _, fade in ipairs(fades) do
+    fade.label:echo(nil, "nocolor", nil)
+  end
+
+  local steps = 20
+  local duration = 0.3
+  local step = 0
+  local timer_id
+
+  -- A plain temp timer: a named one would leave Mudlet holding an ID manager
+  -- for every fade's throwaway user name.
+  timer_id = tempTimer(
+    duration / steps,
+    function()
+      -- The UI can come down mid-fade, taking the item with it.
+      if item.deleted then
+        killTimer(timer_id)
+        return
+      end
+
+      step = step + 1
+
+      set_alpha(math.floor(255 * (1 - step / steps) + 0.5))
+
+      if step >= steps then
+        killTimer(timer_id)
+        done()
+      end
+    end,
+    true
+  )
+end
+
+--- The width a label needs for the text it is showing, its stylesheet's padding
+--- included.
+---
+---@param label table The Geyser.Label to measure.
+---@return number width The width in pixels.
+local function textWidth(label)
+  local width = label:getSizeHint()
+
+  return width
+end
+
+--- Resizes a label to a width, unless it is that wide already.
+---
+---@param label table The Geyser.Label to resize.
+---@param width number The width in pixels.
+local function setWidth(label, width)
+  if label:get_width() ~= width then
+    label:resize(width, nil)
+  end
+end
+
+--- Builds the row for a buff: the name and then the time, each as wide as its
+--- text. The time always gets its full width, so the name is what gets cut off
+--- when the row runs out of room.
+---
+---@return table? item The new row, or nil if Geyser refused its name.
+function __PKGNAME__:MakeItem(buff)
+  -- The unique suffix keeps a re-added buff's labels from sharing names with
+  -- its predecessor's while those are still fading out.
+  self.ItemSerial = self.ItemSerial + 1
+  local name = buff.tag .. "." .. self.ItemSerial
+
+  local item = Geyser.ListItem:new({
+    name = name,
+    fontSize = ItemFontSize,
+    height = "1c",
+    expires = buff.expires,
+    stylesheet = RowStyle,
+    onDismiss = fadeOutItem,
+  }, self.ItemList)
+
+  if not item then return nil end
+
+  local row = Geyser.HBox:new({
+    name = name .. ".Row",
+    x = 0,
+    y = 0,
+    width = "100%",
+    height = "100%",
+  }, item)
+  item.row = row
+
+  -- Everything that lays the row out comes through here, a resized window
+  -- included, so the widths are always worked out against the row's current one.
+  -- The labels aren't there yet for the layouts their own creation sets off.
+  function row:organize()
+    if item.nameLabel and item.timeLabel then
+      local time_width = textWidth(item.timeLabel)
+      local room = math.max(self:get_width() - time_width, 1)
+
+      setWidth(item.timeLabel, time_width)
+      setWidth(item.nameLabel, math.min(textWidth(item.nameLabel), room))
+    end
+
+    Geyser.HBox.organize(self)
+  end
+
+  local nameLabel = Geyser.Label:new({
+    name = name .. ".Name",
+    message = buff.name,
+    fgColor = self.Colors[buff.btype],
+    font = ItemFont,
+    fontSize = ItemFontSize,
+    format = "l",
+    stylesheet = NameStyle,
+    width = 1,
+    h_policy = Geyser.Fixed,
+  }, row)
+
+  local timeLabel = Geyser.Label:new({
+    name = name .. ".Time",
+    message = self:TimeLeft(buff),
+    fgColor = "white",
+    font = ItemFont,
+    fontSize = ItemFontSize,
+    format = "l",
+    stylesheet = TimeStyle,
+    width = 1,
+    h_policy = Geyser.Fixed,
+  }, row)
+
+  item.nameLabel = nameLabel
+  item.timeLabel = timeLabel
+  row:organize()
+
+  return item
+end
+
+--- Puts rows in expiry order, with the names settling any ties.
+---
+---@param a table A row.
+---@param b table Another row.
+---@return boolean first Whether `a` goes before `b`.
+function __PKGNAME__.CompareItems(a, b)
+  if a.expires ~= b.expires then
+    return a.expires < b.expires
+  end
+
+  return a.name < b.name
+end
+
+--- Creates the row for a buff if it has none, then brings its time up to date.
 function __PKGNAME__:AddItem(buff)
   local item = self.Items[buff.tag]
 
   if not item then
-    local color = self.Colors[buff.btype]:match("^<(.-)>$")
+    item = self:MakeItem(buff)
 
-    -- The unique suffix keeps a re-added buff's label from sharing a name with
-    -- its predecessor while that one is still fading out.
-    self.ItemSerial = self.ItemSerial + 1
-    ---@type BuffItemInstance
-    item = glu.buff_item({
-      name = buff.tag .. "." .. self.ItemSerial,
-      fgColor = color,
-      font = "Ubuntu",
-      fontSize = 11,
-      height = "1c",
-    }, self.ItemBox)
-    item:setStyleSheet(ItemStyle)
+    -- Geyser has reported the refused name. The next update tries a new one.
+    if not item then return end
+
     self.Items[buff.tag] = item
-
-    -- Names start with a zero-padded expiry, so sorting the names sorts by expiry.
-    table.sort(self.ItemBox.windows)
-    self:FitItemBox()
   end
 
-  item:set(self:Stringify(buff))
-end
+  local time = self:TimeLeft(buff)
 
---- Resizes the item box to the total height of its items and lays them out
---- again. Once that is taller than the scroll box, the scroll box scrolls.
-function __PKGNAME__:FitItemBox()
-  local box = self.ItemBox
-  local height = 0
-
-  for _, name in ipairs(box.windows) do
-    height = height + box.windowList[name]:get_height()
+  if time ~= item.timeLabel.message then
+    item.timeLabel:echo(time)
+    item.row:organize()
   end
-
-  box:resize(nil, math.max(height, 1))
-  box:organize()
 end
 
 --- Fades out and forgets the item widget for a tag, if there is one.
@@ -253,36 +403,44 @@ function __PKGNAME__:RemoveItem(tag)
   if not item then return end
 
   self.Items[tag] = nil
-  -- The fade outlives the call, and by its end the UI may be gone or this
-  -- table emptied by an uninstall.
-  item:delete(function() if self.ItemBox then self:FitItemBox() end end)
+  item:dismiss()
 end
 
 function __PKGNAME__:ToggleUpdater()
-  local timer = self.idm.timers["UpdateTimer"]
-  -- isActive answers with a count, and 0 is true in Lua, so it has to be
-  -- compared. A stopped timer's handler ID is -1, which isActive rejects.
-  local active = timer ~= nil and timer.handlerID ~= -1 and isActive(timer.handlerID, "timer") > 0
+  local wanted = next(self.Afflictions) ~= nil or next(self.Buffs) ~= nil or next(self.Debuffs) ~= nil
 
-  if next(self.Afflictions) == nil and next(self.Buffs) == nil and next(self.Debuffs) == nil then
-    if active then
-      self.idm:stopTimer("UpdateTimer")
-    end
-  else
-    if not active then
-      if not self.idm:resumeTimer("UpdateTimer") then
-        self.idm:registerTimer(
-          "UpdateTimer",
-          0.25,
-          function() if self and self.UpdateDisplay then self:UpdateDisplay() end end,
-          true
-        )
-      end
-    end
+  if wanted == self.UpdaterRunning then return end
+  self.UpdaterRunning = wanted
+
+  if not wanted then
+    self.idm:stopTimer("UpdateTimer")
+  elseif not self.idm:resumeTimer("UpdateTimer") then
+    self.idm:registerTimer(
+      "UpdateTimer",
+      0.25,
+      function() if self.Tick then self:Tick() end end,
+      true
+    )
   end
 end
 
+--- Runs for the update timer. The display only has whole seconds to show and
+--- os.time() only has whole seconds to compare, so ticks within the same second
+--- have nothing to do. Gmcp events go straight to UpdateDisplay.
+function __PKGNAME__:Tick()
+  local now = os.time()
+
+  if now == self.LastTick then return end
+  self.LastTick = now
+
+  self:UpdateDisplay()
+end
+
 function __PKGNAME__:UpdateDisplay()
+  -- ResetLayout has taken the UI down and is due to put it back. What arrives
+  -- until then stays stored, and its pass on rebuilding draws it.
+  if not self.ItemList then return end
+
   local classes = { "Buffs", "Debuffs", "Afflictions" }
 
   local now = os.time()
@@ -292,7 +450,7 @@ function __PKGNAME__:UpdateDisplay()
 
     if type(storage) == "table" then
       for id, v in pairs(storage) do
-        if v.expires ~= -1 and v.expires >= now then
+        if v.expires >= now then
           self:AddItem(v)
         else
           self:RemoveItem(v.tag)
@@ -353,6 +511,9 @@ function __PKGNAME__:MakeEntry(info, id, name, expires)
     name = glu.string.capitalize(name)
   end
 
+  -- The name goes into a label's rich text, where these would read as markup.
+  name = name:gsub("&", "&amp;"):gsub("<", "&lt;")
+
   expires = tonumber(expires)
   if expires == nil or expires == -1 then
     expires = math.huge
@@ -373,7 +534,7 @@ function __PKGNAME__:Add(event, _)
   local info = self:GetPackageInfo(event)
   if info == nil then return end
 
-  packageTable = gmcp.Char[info.class].Add
+  packageTable = gmcp.Char[info.class].Add or {}
 
   if info.buff_type == "affliction" then
     if not packageTable[1] then return end
@@ -455,15 +616,13 @@ function __PKGNAME__:ConnectionScript()
   self:DeregisterEventHandlers()
   self:RegisterEventHandlers()
 
-  if self.ConnectionTimer == nil then
-    registerNamedTimer(__PKGNAME__.AppName, "AnnounceGMCP", 1, function()
-      sendGMCP([[
-        Core.Supports.Add ["Char 1", "Char.Buffs 1", "Char.Debuffs 1", "Char.Afflictions 1", "Char.Reset 1"]
-      ]])
+  registerNamedTimer(__PKGNAME__.AppName, "AnnounceGMCP", 1, function()
+    sendGMCP([[
+      Core.Supports.Add ["Char 1", "Char.Buffs 1", "Char.Debuffs 1", "Char.Afflictions 1", "Char.Reset 1"]
+    ]])
 
-      deleteNamedTimer(__PKGNAME__.AppName, "AnnounceGMCP")
-    end)
-  end
+    deleteNamedTimer(__PKGNAME__.AppName, "AnnounceGMCP")
+  end)
 end
 
 registerNamedEventHandler(__PKGNAME__.AppName,
@@ -486,7 +645,7 @@ function __PKGNAME__:Install(_, package)
   end
 end
 
-__PKGNAME__.installHandler = registerNamedEventHandler(
+registerNamedEventHandler(
   __PKGNAME__.AppName,
   "__PKGNAME__InstallHandler",
   "sysInstallPackage",
@@ -496,8 +655,8 @@ __PKGNAME__.installHandler = registerNamedEventHandler(
   true
 )
 
-function __PKGNAME__:Uninstall(event, package)
-  if package == self.AppName then
+function __PKGNAME__:Uninstall(event, name)
+  if name == self.AppName then
     -- The GMCP handlers and the update timer live in the package's own ID
     -- manager; the lifecycle handlers, this one included, and the GMCP
     -- announcement live under its name.
@@ -505,9 +664,19 @@ function __PKGNAME__:Uninstall(event, package)
     self.idm:deleteAllTimers()
     deleteAllNamedEventHandlers(self.AppName)
     deleteAllNamedTimers(self.AppName)
+    -- The updater installs the new version in this same session, and the layout
+    -- it restores is the saved one, so anything moved since the last save has to
+    -- be in it, this window's place included. It has to go in before the window
+    -- is deleted: a save only records the windows that exist.
+    saveWindowLayout()
     self:DismantleUI()
-    self.Timer = false
     self:ClearSelf()
+
+    -- The updater installs the new version in this same session. Left cached,
+    -- require would hand back this Glu, with the old vendored code.
+    package.loaded["__PKGNAME__/vendor/Glu-single"] = nil
+    Geyser.List = nil
+    Geyser.ListItem = nil
 
     cecho("\n<tomato>You have uninstalled __PKGNAME__.\n")
   end
@@ -538,6 +707,9 @@ registerNamedEventHandler(
   function()
     __PKGNAME__:DismantleUI()
     __PKGNAME__:BuildUI()
+    -- A profile reset raises this while still connected, with no connection
+    -- event to follow, and it wiped the handlers along with everything else.
+    __PKGNAME__:RegisterEventHandlers()
   end,
   true
 )
