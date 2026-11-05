@@ -16,7 +16,7 @@ jobs:
       - name: Download Updater.lua
         run: |
           mkdir -p src/scripts
-          curl -L -o src/scripts/Updater.lua https://github.com/gesslar/mupdate/releases/latest/download/Updater.lua
+          curl -fsSL -o src/scripts/Updater.lua https://github.com/gesslar/mupdate/releases/latest/download/Updater.lua
 
       - name: Check and create scripts.json if it doesn't exist
         run: |

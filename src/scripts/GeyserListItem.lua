@@ -221,9 +221,9 @@ end
 --- Takes the item out of its list. With an `onDismiss` constraint, that gets the
 -- first say, and the item is deleted when it calls the `done` it was given.
 -- Without one, the item is deleted now. Calling this again while `onDismiss` is
--- at work does nothing.
+-- at work, or once the item is deleted, does nothing.
 function Geyser.ListItem:dismiss()
-  if self.dismissing then return end
+  if self.dismissing or self.deleted then return end
 
   if not self.onDismiss then
     return self:delete()
