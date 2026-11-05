@@ -3,7 +3,7 @@
   "author": {
     "name": "gesslar"
   },
-  "version": "1.7.2",
+  "version": "2.0.0",
   "scripts": {
     "build": "npx -y @gesslar/muddy",
     "watch": "npx -y @gesslar/muddy -w",
