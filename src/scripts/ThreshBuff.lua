@@ -650,7 +650,7 @@ function __PKGNAME__:ConnectionScript()
   self:RegisterEventHandlers()
 
   registerNamedTimer(__PKGNAME__.AppName, "AnnounceGMCP", 1, function()
-    sendGMCP([[Core.Supports.Add ["Char 1", "Char.Buffs 1", "Char.Debuffs 1", "Char.Afflictions 1", "Char.Reset 1"]])
+    sendGMCP([=[Core.Supports.Add ["Char 1", "Char.Buffs 1", "Char.Debuffs 1", "Char.Afflictions 1", "Char.Reset 1"]]=])
 
     deleteNamedTimer(__PKGNAME__.AppName, "AnnounceGMCP")
   end)

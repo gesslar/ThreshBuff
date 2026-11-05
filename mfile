@@ -1,6 +1,6 @@
 {
   "package": "ThreshBuff",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "author": "gesslar",
   "title": "Threshold Buff/Debuff Package for Mudlet",
   "outputFile": true,
