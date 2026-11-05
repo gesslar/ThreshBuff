@@ -1,6 +1,11 @@
 [
   {
-    "name": "BuffItem",
+    "name": "GeyserListItem",
+    "isActive": "yes",
+    "eventHandlerList": []
+  },
+  {
+    "name": "GeyserList",
     "isActive": "yes",
     "eventHandlerList": []
   },

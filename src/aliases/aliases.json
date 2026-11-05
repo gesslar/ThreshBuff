@@ -1,0 +1,9 @@
+[
+  {
+    "name": "ThreshBuff Reset",
+    "isActive": "yes",
+    "isFolder": "no",
+    "regex": "^/threshbuff reset$",
+    "command": ""
+  }
+]
