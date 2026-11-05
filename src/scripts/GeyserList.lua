@@ -162,7 +162,10 @@ function Geyser.List:new(cons, container)
   cons.type = cons.type or "list"
   cons.name = cons.name or Geyser.nameGen("list")
 
-  local me = self.parent:new(cons, container)
+  local me, refused = self.parent:new(cons, container)
+  if not me then
+    return nil, refused
+  end
 
   setmetatable(me, self)
   self.__index = self
@@ -234,6 +237,12 @@ function Geyser.List:new(cons, container)
   -- adding the item to another container.
   function content:remove(window)
     me.selected[window.name] = nil
+
+    -- The stripe was this list's; a row going elsewhere leaves it behind.
+    if window.setStripe and not window.deleted then
+      window:setStripe(nil)
+    end
+
     Geyser.VBox.remove(self, window)
     me:fit()
   end

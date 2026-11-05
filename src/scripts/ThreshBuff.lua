@@ -9,8 +9,12 @@ __PKGNAME__ = __PKGNAME__ or {}
 if __PKGNAME__.idm == nil then
   -- What such a 1.x left behind is still going: its window on screen, its update
   -- timer, and its GMCP handlers, which would handle every event a second time.
-  for _, widget in ipairs(__PKGNAME__.Widgets or {}) do
-    widget:hide()
+  -- Its widgets are deleted, not just hidden, so that their names are free for
+  -- this version's. 1.x added parents first, so going backwards takes children
+  -- before the containers they're in.
+  local legacy = __PKGNAME__.Widgets or {}
+  for i = #legacy, 1, -1 do
+    legacy[i]:delete()
   end
   deleteAllNamedTimers("__PKGNAME__")
   deleteAllNamedEventHandlers("__PKGNAME__")
