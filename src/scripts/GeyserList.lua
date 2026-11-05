@@ -99,9 +99,46 @@ local function setSelected(list, name, selected)
   return true
 end
 
--- Internal function: lays the list out after a row has come in.
+-- Internal function: puts the rows in order, leaving the layout to the caller.
 -- @param list The list.
-local function rowAdded(list)
+-- @param[opt] comparator Given two rows, says whether the first goes first. Without one the `sortBy` is used, or failing that the rows' names.
+local function sortRows(list, comparator)
+  local box = list.content
+  local compare = comparator or list.sortBy
+  local byName
+
+  if compare then
+    byName = function(a, b)
+      return compare(box.windowList[a], box.windowList[b])
+    end
+  end
+
+  table.sort(box.windows, byName)
+  list.pendingSort = nil
+end
+
+-- Internal function: lays out the rows as they stand, or leaves that for when layouts aren't being
+-- held back.
+-- @param list The list.
+local function organize(list)
+  if deferring(list) then
+    list.pendingFit = true
+    return
+  end
+
+  list.content:organize()
+end
+
+-- Internal function: takes in a row that has just come in, and lays the list out.
+-- @param list The list.
+-- @param window The row.
+local function rowAdded(list, window)
+  -- Only a built Geyser.ListItem has this, and one being built connects itself once it
+  -- is, so this is one moving in from elsewhere.
+  if window.setStripe then
+    list:connectItem(window)
+  end
+
   if deferring(list) then
     list.pendingSort = list.sortBy ~= nil
     list.pendingFit = true
@@ -109,7 +146,7 @@ local function rowAdded(list)
   end
 
   if list.sortBy then
-    list:sort()
+    sortRows(list)
   end
 
   list:fit()
@@ -235,7 +272,7 @@ function Geyser.List:add(window, cons)
 
   window.v_policy = Geyser.Fixed
   self.content:add(window, cons)
-  rowAdded(self)
+  rowAdded(self, window)
 end
 
 --- Adds a window to the list as a row, by way of `Geyser:add2`. See `add`.
@@ -250,7 +287,7 @@ function Geyser.List:add2(window, cons, passAdd2, exclude)
 
   window.v_policy = Geyser.Fixed
   self.content:add2(window, cons, passAdd2, exclude)
-  rowAdded(self)
+  rowAdded(self, window)
 end
 
 --- Creates a Geyser.ListItem in the list.
@@ -297,7 +334,7 @@ function Geyser.List:moveItem(item, index)
   local name = table.remove(windows, from)
 
   table.insert(windows, math.max(1, math.min(index, #windows + 1)), name)
-  self.content:organize()
+  organize(self)
 
   return true
 end
@@ -342,7 +379,8 @@ end
 --- Deletes every row now, without consulting any `onDismiss`, and without telling
 -- `onSelectionChange` about the selection going with them.
 function Geyser.List:clear()
-  local wasDeferring = self.defer_updates
+  -- rawget: what it inherits from Geyser is Geyser's to end.
+  local wasDeferring = rawget(self, "defer_updates")
 
   self:begin_update()
 
@@ -370,19 +408,8 @@ end
 --- Sorts the list and lays it out again.
 -- @param[opt] comparator Given two rows, says whether the first goes first. It is used this once, and without one the `sortBy` is used, or failing that the rows' names.
 function Geyser.List:sort(comparator)
-  local box = self.content
-  local compare = comparator or self.sortBy
-  local byName
-
-  if compare then
-    byName = function(a, b)
-      return compare(box.windowList[a], box.windowList[b])
-    end
-  end
-
-  table.sort(box.windows, byName)
-  self.pendingSort = nil
-  box:organize()
+  sortRows(self, comparator)
+  organize(self)
 end
 
 --- Sets the order the list keeps itself in from now on, and sorts it.
@@ -392,6 +419,8 @@ function Geyser.List:setSortBy(comparator)
 
   if comparator then
     self:sort()
+  else
+    self.pendingSort = nil
   end
 end
 
@@ -509,10 +538,19 @@ function Geyser.List:connectItem(item)
   if self.selectionMode == "none" or item.clickCallback then return end
 
   item:setClickCallback(function()
-    if self.selectionMode == "multi" then
-      self:toggle(item)
-    elseif self.selectionMode == "single" then
-      self:select(item)
+    -- A Geyser.ListItem can have moved to another list since.
+    local list = self
+
+    if item.getList then
+      list = item:getList()
+    end
+
+    if not list then return end
+
+    if list.selectionMode == "multi" then
+      list:toggle(item)
+    elseif list.selectionMode == "single" then
+      list:select(item)
     end
   end)
 end
@@ -540,7 +578,7 @@ function Geyser.List:setSelectionMode(mode)
   end
 
   for _, item in ipairs(self:getItems()) do
-    if item.setClickCallback then
+    if item.setStripe then
       self:connectItem(item)
     end
   end
@@ -564,9 +602,10 @@ function Geyser.List:select(item)
   local name = nameOf(item)
 
   if self.selectionMode == "single" then
-    for other in pairs(self.selected) do
-      if other ~= name then
-        setSelected(self, other, false)
+    -- A copy, as `onSelectionChange` is free to change the selection.
+    for _, other in ipairs(self:getSelected()) do
+      if other.name ~= name then
+        setSelected(self, other.name, false)
       end
     end
   end

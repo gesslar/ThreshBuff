@@ -7,6 +7,14 @@
 __PKGNAME__ = __PKGNAME__ or {}
 
 if __PKGNAME__.idm == nil then
+  -- What such a 1.x left behind is still going: its window on screen, its update
+  -- timer, and its GMCP handlers, which would handle every event a second time.
+  for _, widget in ipairs(__PKGNAME__.Widgets or {}) do
+    widget:hide()
+  end
+  deleteAllNamedTimers("__PKGNAME__")
+  deleteAllNamedEventHandlers("__PKGNAME__")
+
   for key, value in pairs({
     AppName = "__PKGNAME__",
     Buffs = {},
@@ -72,14 +80,26 @@ local TimeStyle = [[
 local ItemFont = "Ubuntu"
 local ItemFontSize = 11
 
-function __PKGNAME__:AddWidget(widget)
-  for _, v in ipairs(self.Widgets) do
-    if v == widget then
-      return
-    end
-  end
+-- The GMCP packages, by the name their events carry, with where each one's
+-- entries are stored and what their ids are called.
+local PackageInfo = {
+  Buffs = { class = "Buffs", label = "buff_id", buff_type = "buff" },
+  Debuffs = { class = "Debuffs", label = "debuff_id", buff_type = "debuff" },
+  Afflictions = { class = "Afflictions", buff_type = "affliction" },
+}
 
-  table.insert(self.Widgets, widget)
+local Classes = { "Buffs", "Debuffs", "Afflictions" }
+
+--- The file whose existence says a build has happened, so that the saved layout
+--- knows the window.
+local function layoutMarker()
+  return getMudletHomeDir() .. "/__PKGNAME__.layout"
+end
+
+function __PKGNAME__:AddWidget(widget)
+  if not table.index_of(self.Widgets, widget) then
+    table.insert(self.Widgets, widget)
+  end
 end
 
 function __PKGNAME__:RegisterEventHandlers()
@@ -102,8 +122,8 @@ end
 ---
 ---@param useDefaults boolean? Ignore the saved layout.
 function __PKGNAME__:BuildUI(useDefaults)
-  local marker = getMudletHomeDir() .. "/__PKGNAME__.layout"
-  local restore = not useDefaults and io.exists(marker)
+  local marker = layoutMarker()
+  local restore = not useDefaults and (self.LayoutSaved or io.exists(marker))
 
   self.MainWindow = self.MainWindow or Geyser.UserWindow:new({
     name = "__PKGNAME__.MainWindow",
@@ -114,7 +134,9 @@ function __PKGNAME__:BuildUI(useDefaults)
   })
   self:AddWidget(self.MainWindow)
 
-  if not restore then
+  self.LayoutSaved = nil
+
+  if not io.exists(marker) then
     local file = io.open(marker, "w")
     if file then file:close() end
   end
@@ -271,9 +293,7 @@ end
 ---@param label table The Geyser.Label to measure.
 ---@return number width The width in pixels.
 local function textWidth(label)
-  local width = label:getSizeHint()
-
-  return width
+  return (label:getSizeHint())
 end
 
 --- Resizes a label to a width, unless it is that wide already.
@@ -441,21 +461,17 @@ function __PKGNAME__:UpdateDisplay()
   -- until then stays stored, and its pass on rebuilding draws it.
   if not self.ItemList then return end
 
-  local classes = { "Buffs", "Debuffs", "Afflictions" }
-
   local now = os.time()
 
-  for _, class in ipairs(classes) do
+  for _, class in ipairs(Classes) do
     local storage = self[class]
 
-    if type(storage) == "table" then
-      for id, v in pairs(storage) do
-        if v.expires >= now then
-          self:AddItem(v)
-        else
-          self:RemoveItem(v.tag)
-          storage[id] = nil
-        end
+    for id, v in pairs(storage) do
+      if v.expires >= now then
+        self:AddItem(v)
+      else
+        self:RemoveItem(v.tag)
+        storage[id] = nil
       end
     end
   end
@@ -464,40 +480,35 @@ function __PKGNAME__:UpdateDisplay()
 end
 
 function __PKGNAME__:GetPackageInfo(pkg)
-  local info
-  local package_type = string.match(pkg, "gmcp%.Char%.(%a+)%.")
-
-  if package_type == "Buffs" then
-    info = {
-      class = "Buffs",
-      label = "buff_id",
-      buff_type = "buff",
-    }
-  elseif package_type == "Debuffs" then
-    info = {
-      class = "Debuffs",
-      label = "debuff_id",
-      buff_type = "debuff",
-    }
-  elseif package_type == "Afflictions" then
-    info = {
-      class = "Afflictions",
-      label = "name",
-      buff_type = "affliction",
-    }
-  else
-    return nil
-  end
-
-  return info
+  return PackageInfo[string.match(pkg, "gmcp%.Char%.(%a+)%.")]
 end
 
---- Builds the stored entry for one buff, debuff or affliction. Ids are kept
---- as strings, since a List carries them as JSON object keys while Add and
---- Remove may carry them as numbers, and all three have to find the same
---- entry. The display name is worked out once here rather than on every tick.
+--- The string an id is stored under. Ids are kept as strings, since a List
+--- carries them as JSON object keys while Add and Remove may carry them as
+--- numbers, and all three have to find the same entry. tostring would put a
+--- number of 15 digits or more in exponent form, which is neither the key a List
+--- has for it nor unique to it.
+---
+---@param id any The id, as it came.
+---@return string id The id to store it under.
+local function entryId(id)
+  if type(id) == "number" then
+    return string.format("%.0f", id) --[[@as string]]
+  end
+
+  return tostring(id)
+end
+
+--- Whether a new entry can keep the row an old one has. A row's tag covers its
+--- expiry, and it shows the name it was made with.
+local function sameRow(old, new)
+  return old.tag == new.tag and old.name == new.name
+end
+
+--- Builds the stored entry for one buff, debuff or affliction. The display name
+--- is worked out once here rather than on every tick.
 function __PKGNAME__:MakeEntry(info, id, name, expires)
-  id = tostring(id)
+  id = entryId(id)
 
   if type(name) ~= "string" or name == "" then
     name = id
@@ -549,7 +560,7 @@ function __PKGNAME__:Add(event, _)
   -- A renewal comes in with a new expiry, so its tag changes and the old item
   -- has to go. An identical re-add keeps its tag and its item.
   local old = self[info.class][work.id]
-  if old and old.tag ~= work.tag then
+  if old and not sameRow(old, work) then
     self:RemoveItem(old.tag)
   end
 
@@ -559,12 +570,10 @@ function __PKGNAME__:Add(event, _)
 end
 
 function __PKGNAME__:Remove(event, _)
-  local id, info
-
-  info = self:GetPackageInfo(event)
+  local info = self:GetPackageInfo(event)
   if info == nil then return end
 
-  id = tostring(gmcp.Char[info.class].Remove)
+  local id = entryId(gmcp.Char[info.class].Remove)
 
   local old = self[info.class][id]
   if old then
@@ -602,24 +611,42 @@ function __PKGNAME__:List(event, _)
 
   for id, old in pairs(self[info.class]) do
     local new = storage[id]
-    if not new or new.tag ~= old.tag then
+    if not new or not sameRow(old, new) then
       self:RemoveItem(old.tag)
     end
   end
 
   self[info.class] = storage
 
+  -- A List can bring every row at once, as it does on logging in.
+  local list = self.ItemList
+
+  if list then list:begin_update() end
   self:UpdateDisplay()
+  if list then list:end_update() end
+end
+
+--- Forgets everything stored, for when what the server says has started over.
+function __PKGNAME__:ClearEntries()
+  for _, class in ipairs(Classes) do
+    for _, entry in pairs(self[class]) do
+      self:RemoveItem(entry.tag)
+    end
+
+    self[class] = {}
+  end
+
+  self:ToggleUpdater()
 end
 
 function __PKGNAME__:ConnectionScript()
-  self:DeregisterEventHandlers()
+  -- This connection's Lists only say what this login has, and a server with
+  -- nothing to list needn't send one, so nothing from the last login can stay.
+  self:ClearEntries()
   self:RegisterEventHandlers()
 
   registerNamedTimer(__PKGNAME__.AppName, "AnnounceGMCP", 1, function()
-    sendGMCP([[
-      Core.Supports.Add ["Char 1", "Char.Buffs 1", "Char.Debuffs 1", "Char.Afflictions 1", "Char.Reset 1"]
-    ]])
+    sendGMCP([[Core.Supports.Add ["Char 1", "Char.Buffs 1", "Char.Debuffs 1", "Char.Afflictions 1", "Char.Reset 1"]])
 
     deleteNamedTimer(__PKGNAME__.AppName, "AnnounceGMCP")
   end)
@@ -672,6 +699,12 @@ function __PKGNAME__:Uninstall(event, name)
     self:DismantleUI()
     self:ClearSelf()
 
+    -- That save is good for this session. The one Mudlet makes on closing won't
+    -- have the window in it, so a later install is a first build again, and only
+    -- this table, which outlives the uninstall but not the session, can say so.
+    os.remove(layoutMarker())
+    self.LayoutSaved = true
+
     -- The updater installs the new version in this same session. Left cached,
     -- require would hand back this Glu, with the old vendored code.
     package.loaded["__PKGNAME__/vendor/Glu-single"] = nil
@@ -704,12 +737,18 @@ registerNamedEventHandler(
   __PKGNAME__.AppName,
   "__PKGNAME__Load",
   "sysLoadEvent",
-  function()
+  function(_, freshLoad)
     __PKGNAME__:DismantleUI()
     __PKGNAME__:BuildUI()
     -- A profile reset raises this while still connected, with no connection
-    -- event to follow, and it wiped the handlers along with everything else.
+    -- event to follow, and it wiped the handlers along with everything else,
+    -- what was stored included, which the server won't send again unprompted.
     __PKGNAME__:RegisterEventHandlers()
+
+    local _, _, connected = getConnectionInfo()
+    if not freshLoad and connected then
+      tempTimer(0.5, function() send("gmcp reset", false) end)
+    end
   end,
   true
 )
