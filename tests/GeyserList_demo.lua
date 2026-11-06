@@ -119,7 +119,7 @@ local function panel(key, title, listCons, makeRow)
   end
 
   local buttons = {
-    { "+1", function() add(1) end },
+    { "+1",  function() add(1) end },
     { "+20", function() add(20) end },
     { "Top", function()
       local first = list:getSelected()[1]

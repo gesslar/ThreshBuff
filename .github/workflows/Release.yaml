@@ -1,0 +1,17 @@
+name: Release
+
+on:
+  pull_request:
+    types: [ closed ]
+    branches: [ main ]
+
+jobs:
+  Release:
+    if: ${{ github.event.pull_request.merged == true }}
+    uses: gesslar/Maint/.github/workflows/ReleaseMudlet.yaml@main
+    with:
+      inject_mupdate: true
+      quality_check: ""
+    secrets: inherit
+    permissions:
+      contents: write

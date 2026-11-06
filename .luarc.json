@@ -25,7 +25,8 @@
       "Glu-single.lua",
       "src/resources/vendor",
       "src/resources/test",
-      "tests"
+      "tests",
+      "delwing.mudlet-scripts-sdk"
     ],
     "useGitIgnore": true
   }

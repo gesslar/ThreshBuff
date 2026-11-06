@@ -1,5 +1,12 @@
 [
   {
+    "name": "ThreshBuff Command",
+    "isActive": "yes",
+    "isFolder": "no",
+    "regex": "^/tbuff(?:\\s+(.*))?$",
+    "command": ""
+  },
+  {
     "name": "ThreshBuff Reset",
     "isActive": "yes",
     "isFolder": "no",

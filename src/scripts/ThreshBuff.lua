@@ -35,11 +35,6 @@ if __PKGNAME__.idm == nil then
       { "gmcp.Char.Debuffs.Remove",     "__PKGNAME__:Remove" },
       { "gmcp.Char.Debuffs.List",       "__PKGNAME__:List" },
     },
-    Colors = {
-      buff = "chartreuse",
-      debuff = "tomato",
-      affliction = "orchid"
-    },
     Widgets = {},
     Items = {},
     ItemSerial = 0,
@@ -61,6 +56,34 @@ end
 
 ---@type Glu
 local glu = __PKGNAME__:SetupGlu()
+
+-- Prefs (stored in the profile directory so they survive reinstalls). The
+-- colours are Mudlet colour names; /tbuff sets them.
+__PKGNAME__.PrefsFile = "__PKGNAME__.Preferences.lua"
+__PKGNAME__.PrefsDefaults = {
+  Colors = {
+    buff = "forest_green",
+    debuff = "indian_red",
+    affliction = "medium_orchid",
+    time = "grey",
+  },
+}
+
+-- Packages installed alongside this one. Helper formats the /tbuff help; the
+-- buff window doesn't need it, so it's never waited on.
+__PKGNAME__.Dependencies = {
+  { name = "Helper", url = "https://github.com/gesslar/Helper/releases/latest/download/Helper.mpackage" },
+}
+
+function __PKGNAME__:LoadPrefs()
+  self.Prefs = glu.preferences.load(nil, self.PrefsFile, self.PrefsDefaults)
+end
+
+function __PKGNAME__:SavePrefs()
+  glu.preferences.save(nil, self.PrefsFile, self.Prefs)
+end
+
+__PKGNAME__:LoadPrefs()
 
 local PanelStyle = [[
     background-color: "#333";
@@ -326,6 +349,7 @@ function __PKGNAME__:MakeItem(buff)
     fontSize = ItemFontSize,
     height = "1c",
     expires = buff.expires,
+    btype = buff.btype,
     stylesheet = RowStyle,
     onDismiss = fadeOutItem,
   }, self.ItemList)
@@ -359,7 +383,7 @@ function __PKGNAME__:MakeItem(buff)
   local nameLabel = Geyser.Label:new({
     name = name .. ".Name",
     message = buff.name,
-    fgColor = self.Colors[buff.btype],
+    fgColor = self.Prefs.Colors[buff.btype],
     font = ItemFont,
     fontSize = ItemFontSize,
     format = "l",
@@ -371,7 +395,7 @@ function __PKGNAME__:MakeItem(buff)
   local timeLabel = Geyser.Label:new({
     name = name .. ".Time",
     message = self:TimeLeft(buff),
-    fgColor = "white",
+    fgColor = self.Prefs.Colors.time,
     font = ItemFont,
     fontSize = ItemFontSize,
     format = "l",
@@ -385,6 +409,22 @@ function __PKGNAME__:MakeItem(buff)
   row:organize()
 
   return item
+end
+
+--- Repaints the rows on screen after a colour change. `kind` is a buff type,
+--- whose names take the colour, or "time", for every row's time.
+---
+---@param kind string buff, debuff, affliction, or time.
+function __PKGNAME__:RecolorItems(kind)
+  local color = self.Prefs.Colors[kind]
+
+  for _, item in pairs(self.Items) do
+    if kind == "time" then
+      item.timeLabel:setFgColor(color)
+    elseif item.btype == kind then
+      item.nameLabel:setFgColor(color)
+    end
+  end
 end
 
 --- Puts rows in expiry order, with the names settling any ties.
@@ -670,8 +710,10 @@ function __PKGNAME__:Install(_, package)
     self:ConnectionScript()
     self:DismantleUI()
     self:BuildUI()
-    echo("Thank you for installing __PKGNAME__!\n")
-    echo("Initializing GMCP in Threshold.\n")
+    cecho("<royal_blue>[__PKGNAME__]<r> Thank you for installing __PKGNAME__ __VERSION__!\n")
+    cecho("<royal_blue>[__PKGNAME__]<r> Initializing GMCP in Threshold.\n")
+    -- Fresh install: show the /tbuff help once Helper is there to format it
+    self:LoadDependencies(true)
     tempTimer(1, function() send("gmcp reset", false) end)
   end
 end
@@ -715,8 +757,30 @@ function __PKGNAME__:Uninstall(event, name)
     Geyser.List = nil
     Geyser.ListItem = nil
 
-    cecho("\n<tomato>You have uninstalled __PKGNAME__.\n")
+    cecho("\n<royal_blue>[__PKGNAME__]<r> You have uninstalled __PKGNAME__ __VERSION__.\n")
   end
+end
+
+--- Installs anything in Dependencies that isn't installed yet, then shows the
+--- /tbuff help if `announce` is set (on a fresh install).
+---
+---@param announce boolean? Show the help once done.
+function __PKGNAME__:LoadDependencies(announce)
+  local deps = glu.dependency_queue(self.Dependencies, function(ok, message)
+    if not ok then
+      cecho("<tomato>[__PKGNAME__]<r> " .. (message or "Couldn't install dependencies.") .. "\n")
+    end
+
+    if announce then
+      -- Runs straight away when Helper is already installed; the timer puts
+      -- the help after the welcome lines either way. Uninstall empties this
+      -- table, methods included.
+      tempTimer(0.1, function() if self.ShowHelp then self:ShowHelp() end end)
+    end
+  end)
+
+  -- nil when everything is already installed
+  if deps then deps.start() end
 end
 
 function __PKGNAME__:ClearSelf()
@@ -748,6 +812,7 @@ registerNamedEventHandler(
     -- event to follow, and it wiped the handlers along with everything else,
     -- what was stored included, which the server won't send again unprompted.
     __PKGNAME__:RegisterEventHandlers()
+    __PKGNAME__:LoadDependencies()
 
     local _, _, connected = getConnectionInfo()
     if not freshLoad and connected then

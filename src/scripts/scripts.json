@@ -13,5 +13,10 @@
     "name": "ThreshBuff",
     "isActive": "yes",
     "eventHandlerList": []
+  },
+  {
+    "name": "Commands",
+    "isActive": "yes",
+    "eventHandlerList": []
   }
 ]
