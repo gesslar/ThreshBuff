@@ -304,5 +304,9 @@ function Geyser.ListItem:delete()
   if self.deleted then return end
   self.deleted = true
 
+  -- deleteLabel only schedules the widget's removal, which the scroll box of a
+  -- Mudlet older than this class doesn't notice; hiding it first makes it re-fit.
+  self:hide()
+
   return Geyser.Label.delete(self)
 end
