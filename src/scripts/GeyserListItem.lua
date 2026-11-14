@@ -6,6 +6,11 @@
 -- @author gesslar
 -- @module Geyser.ListItem
 
+-- Mudlet versions that ship Geyser.ListItem keep their own; this copy is for the rest.
+if Geyser.ListItem then
+  return
+end
+
 --- Represents a single row of a Geyser.List.
 -- @field onInsert A function called with the item once it is built.
 -- @field onDismiss A function `dismiss()` calls with the item and a `done` function, which deletes the item.
@@ -14,6 +19,8 @@ Geyser.ListItem = {
   name = "ListItemClass",
 }
 Geyser.ListItem.parent = Geyser.Label
+-- Uninstall only takes away the class if it is this copy.
+Geyser.ListItem.vendoredBy = "__PKGNAME__"
 setmetatable(Geyser.ListItem, Geyser.Label)
 Geyser.ListItem.__index = Geyser.ListItem
 
@@ -39,13 +46,25 @@ function Geyser.ListItem:new(cons, container)
   end
 
   setmetatable(me, self)
+  self.__index = self
 
-  me.ownStyleSheet = me.stylesheet
+  -- An item built from another would read that one's state through its
+  -- metatable; these shadow it. Its own stylesheet is passed on, its stripe isn't.
+  me.deleted, me.dismissing, me.stripe, me.textReplaced = false, false, false, false
+  me.ownStyleSheet = rawget(me, "stylesheet") or me.ownStyleSheet
+  if me.ownStyleSheet and not rawget(me, "stylesheet") then
+    me:setStyleSheet()
+  end
 
   local list = me:getList()
   if list then
     list:connectItem(me)
     list:restripe()
+
+    -- The list measured the row before the label had its text and size.
+    if me.autoHeight then
+      list:fit()
+    end
   end
 
   if me.onInsert then
@@ -113,18 +132,35 @@ function Geyser.ListItem:setOnDismiss(callback)
   self.onDismiss = callback
 end
 
+-- Internal function: a stylesheet as rules. Qt reads one as bare declarations or as
+-- rules, and drops what doesn't fit a mix of the two.
+-- @param css The stylesheet.
+-- @return It, or its declarations in a rule for the label.
+local function asRules(css)
+  if css:find("{", 1, true) then
+    return css
+  end
+
+  return "QLabel{ " .. css .. " }"
+end
+
 --- Sets the item's stylesheet, as `Geyser.Label:setStyleSheet` does, keeping any
 -- stripe its list has given it underneath. `stylesheet` holds the two together.
 -- @param[opt] css The Qt stylesheet to apply. Without one, the current one is applied again.
 function Geyser.ListItem:setStyleSheet(css)
   self.ownStyleSheet = css or self.ownStyleSheet
 
-  local stripe = self.stripe or ""
+  local stripe, own = self.stripe or "", self.ownStyleSheet or ""
+
+  if stripe ~= "" and own ~= "" and (stripe:find("{", 1, true) or own:find("{", 1, true)) then
+    return Geyser.Label.setStyleSheet(self, asRules(stripe) .. " " .. asRules(own))
+  end
+
   if stripe ~= "" and not stripe:match(";%s*$") then
     stripe = stripe .. ";"
   end
 
-  return Geyser.Label.setStyleSheet(self, stripe .. (self.ownStyleSheet or ""))
+  return Geyser.Label.setStyleSheet(self, stripe .. own)
 end
 
 --- Sets the stylesheet that goes under the item's own. Its list calls this.
@@ -142,10 +178,36 @@ end
 -- @param[opt] color The colour to use.
 -- @param[opt] format The format list to use.
 function Geyser.ListItem:echo(message, color, format)
-  local unchanged = message == self.message and not self.echoType
+  local unchanged = not self.textReplaced and message == rawget(self, "message") and not rawget(self, "echoType")
   if unchanged and not color and not format then return end
 
+  self.textReplaced = false
   return Geyser.Label.echo(self, message, color, format)
+end
+
+--- Prints raw text to the item, as `Geyser.Label:rawEcho` does.
+-- @param message The text to print.
+function Geyser.ListItem:rawEcho(message)
+  self.textReplaced = true
+  return Geyser.Label.rawEcho(self, message)
+end
+
+--- Sets a background image, as `Geyser.Label:setBackgroundImage` does.
+-- @param imageFileName The image to show.
+-- @return True, or nil and an error message.
+-- @return The error message.
+function Geyser.ListItem:setBackgroundImage(imageFileName)
+  self.textReplaced = true
+  return Geyser.Label.setBackgroundImage(self, imageFileName)
+end
+
+--- Shows a movie, as `Geyser.Label:setMovie` does.
+-- @param fileName The movie to show.
+-- @return True, or nil and an error message.
+-- @return The error message.
+function Geyser.ListItem:setMovie(fileName)
+  self.textReplaced = true
+  return Geyser.Label.setMovie(self, fileName)
 end
 
 -- Internal function: whether a flavoured echo would show what the item already shows.
@@ -154,8 +216,8 @@ end
 -- @param[opt] message The message it is being asked to show.
 -- @return Whether nothing would change.
 local function showing(item, flavour, message)
-  return message ~= nil and item.echoType == flavour and item.echoMessage == message
-    and item.message == message
+  return message ~= nil and not item.textReplaced and rawget(item, "echoType") == flavour
+    and rawget(item, "echoMessage") == message and rawget(item, "message") == message
 end
 
 --- Prints a message as `Geyser.Label:cecho` does. Does nothing when asked to show
@@ -166,6 +228,7 @@ end
 function Geyser.ListItem:cecho(message)
   if showing(self, "cecho", message) then return true end
 
+  self.textReplaced = false
   return Geyser.Label.cecho(self, message)
 end
 
@@ -177,6 +240,7 @@ end
 function Geyser.ListItem:decho(message)
   if showing(self, "decho", message) then return true end
 
+  self.textReplaced = false
   return Geyser.Label.decho(self, message)
 end
 
@@ -188,6 +252,7 @@ end
 function Geyser.ListItem:hecho(message)
   if showing(self, "hecho", message) then return true end
 
+  self.textReplaced = false
   return Geyser.Label.hecho(self, message)
 end
 
@@ -238,10 +303,6 @@ end
 function Geyser.ListItem:delete()
   if self.deleted then return end
   self.deleted = true
-
-  -- deleteLabel only schedules the widget's removal, which a scroll box doesn't
-  -- notice; hiding it first makes the scroll box re-fit.
-  self:hide()
 
   return Geyser.Label.delete(self)
 end

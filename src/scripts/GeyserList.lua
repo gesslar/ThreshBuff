@@ -18,6 +18,11 @@
 -- @author gesslar
 -- @module Geyser.List
 
+-- Mudlet versions that ship Geyser.List keep their own; this copy is for the rest.
+if Geyser.List then
+  return
+end
+
 --- Represents a scrolling vertical list.
 -- @field scrollbarWidth Pixels kept clear for the vertical scrollbar, while there is one. Default is 20.
 -- @field frameWidth Pixels the scroll box's frame takes from the room inside it, edges together. A box reports its outer size, so content that size would be too big for it. Default is 4.
@@ -35,6 +40,8 @@ Geyser.List = Geyser.Container:new({
 })
 
 Geyser.List.parent = Geyser.Container
+-- Uninstall only takes away the class if it is this copy.
+Geyser.List.vendoredBy = "__PKGNAME__"
 
 -- Internal function: the width constraint for stopping short of the right edge by some pixels. A
 -- constraint of -0 would be read as no width at all.
@@ -108,8 +115,17 @@ local function sortRows(list, comparator)
   local byName
 
   if compare then
+    -- table.sort isn't stable, so rows that tie keep the order they had.
+    local position = {}
+    for i, name in ipairs(box.windows) do
+      position[name] = i
+    end
+
     byName = function(a, b)
-      return compare(box.windowList[a], box.windowList[b])
+      local rowA, rowB = box.windowList[a], box.windowList[b]
+      if compare(rowA, rowB) then return true end
+      if compare(rowB, rowA) then return false end
+      return position[a] < position[b]
     end
   end
 
@@ -233,9 +249,39 @@ function Geyser.List:new(cons, container)
     me:restripe()
   end
 
+  -- A fit that is waiting lays the rows out itself, right after this.
+  function content:reposition(skipChildren)
+    if me.pendingFit then
+      return Geyser.Container.reposition(self, skipChildren)
+    end
+
+    Geyser.VBox.reposition(self, skipChildren)
+  end
+
+  -- Every way into the list comes through these, changeContainer included. They
+  -- skip the VBox's own layout, as rowAdded() lays the rows out anyway.
+  function content:add(window, cons)
+    window.v_policy = Geyser.Fixed
+
+    if self.useAdd2 then
+      Geyser.add2(self, window, cons)
+    else
+      Geyser.add(self, window, cons)
+    end
+
+    rowAdded(me, window)
+  end
+
+  function content:add2(window, cons, passAdd2, exclude)
+    window.v_policy = Geyser.Fixed
+    Geyser.add2(self, window, cons, passAdd2, exclude)
+    rowAdded(me, window)
+  end
+
   -- Every way out of the list comes through here: delete, changeContainer, and
   -- adding the item to another container.
   function content:remove(window)
+    local wasSelected = me.selected[window.name]
     me.selected[window.name] = nil
 
     -- The stripe was this list's; a row going elsewhere leaves it behind.
@@ -243,11 +289,17 @@ function Geyser.List:new(cons, container)
       window:setStripe(nil)
     end
 
-    Geyser.VBox.remove(self, window)
+    Geyser.remove(self, window)
     me:fit()
+
+    -- Last, so a callback that raises can't leave the row half removed.
+    if wasSelected and me.onSelectionChange then
+      me.onSelectionChange(me, window, false)
+    end
   end
 
   me.content = content
+  me.childContainer = content
 
   return me
 end
@@ -279,9 +331,7 @@ function Geyser.List:add(window, cons)
     return Geyser.add(self, window, cons)
   end
 
-  window.v_policy = Geyser.Fixed
   self.content:add(window, cons)
-  rowAdded(self, window)
 end
 
 --- Adds a window to the list as a row, by way of `Geyser:add2`. See `add`.
@@ -294,9 +344,7 @@ function Geyser.List:add2(window, cons, passAdd2, exclude)
     return Geyser.add2(self, window, cons, passAdd2, exclude)
   end
 
-  window.v_policy = Geyser.Fixed
   self.content:add2(window, cons, passAdd2, exclude)
-  rowAdded(self, window)
 end
 
 --- Creates a Geyser.ListItem in the list.
@@ -385,33 +433,60 @@ function Geyser.List:indexOf(item)
   return table.index_of(self.content.windows, nameOf(item))
 end
 
---- Deletes every row now, without consulting any `onDismiss`, and without telling
--- `onSelectionChange` about the selection going with them.
-function Geyser.List:clear()
+-- Internal function: runs a function with the layout held back, and ends the update
+-- afterwards even if the function raises, unless one was already running.
+-- @param list The list.
+-- @param fn The function.
+local function holdingLayout(list, fn)
   -- rawget: what it inherits from Geyser is Geyser's to end.
-  local wasDeferring = rawget(self, "defer_updates")
+  local wasDeferring = rawget(list, "defer_updates")
 
-  self:begin_update()
+  list:begin_update()
 
-  for _, item in ipairs(self:getItems()) do
-    item:delete()
+  -- Not pcall: Lua 5.1 can't yield across one, and an onDismiss may yield. fn runs
+  -- in a coroutine of its own instead, and its yields are passed on to ours.
+  local co = coroutine.create(fn)
+  local results = {coroutine.resume(co)}
+
+  while results[1] and coroutine.status(co) == "suspended" do
+    if not coroutine.running() then
+      results = {false, "attempt to yield from outside a coroutine"}
+      break
+    end
+    local passed = {coroutine.yield(unpack(results, 2, table.maxn(results)))}
+    results = {coroutine.resume(co, unpack(passed, 1, table.maxn(passed)))}
   end
 
   if not wasDeferring then
-    self:end_update()
+    list:end_update()
   end
+
+  if not results[1] then
+    error(results[2], 0)
+  end
+end
+
+--- Deletes every row now, without consulting any `onDismiss`.
+function Geyser.List:clear()
+  holdingLayout(self, function()
+    for _, item in ipairs(self:getItems()) do
+      item:delete()
+    end
+  end)
 end
 
 --- Dismisses every row: `dismiss()` for those that have it, so that an `onDismiss`
 -- gets its say, and `delete()` for those that don't.
 function Geyser.List:dismissAll()
-  for _, item in ipairs(self:getItems()) do
-    if item.dismiss then
-      item:dismiss()
-    else
-      item:delete()
+  holdingLayout(self, function()
+    for _, item in ipairs(self:getItems()) do
+      if item.dismiss then
+        item:dismiss()
+      else
+        item:delete()
+      end
     end
-  end
+  end)
 end
 
 --- Sorts the list and lays it out again.
@@ -453,7 +528,14 @@ function Geyser.List:fit()
     height = height + box.windowList[name]:get_height()
   end
 
-  box:resize(nil, math.max(height, 1))
+  height = math.max(height, 1)
+
+  -- Not resize(), which places every row only for organize() to place them again.
+  if height ~= box:get_height() then
+    box.height = height
+    Geyser.calc_constraints(box, box, box.container)
+  end
+
   settleWidth(self)
   box:organize()
 end
@@ -544,7 +626,8 @@ end
 -- label exists; other windows have to do their own clicking.
 -- @param item The item.
 function Geyser.List:connectItem(item)
-  if self.selectionMode == "none" or item.clickCallback then return end
+  -- rawget: one an item built from another inherits is that other's.
+  if self.selectionMode == "none" or rawget(item, "clickCallback") then return end
 
   item:setClickCallback(function()
     -- A Geyser.ListItem can have moved to another list since.
@@ -615,6 +698,17 @@ function Geyser.List:select(item)
     for _, other in ipairs(self:getSelected()) do
       if other.name ~= name then
         setSelected(self, other.name, false)
+      end
+    end
+
+    -- Those calls can take the row away, or select another, which then stands.
+    if not self:indexOf(name) then
+      return nil, "that isn't in this list"
+    end
+
+    for other in pairs(self.selected) do
+      if other ~= name then
+        return nil, "onSelectionChange selected another row"
       end
     end
   end

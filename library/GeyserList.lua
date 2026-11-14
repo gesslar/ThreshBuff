@@ -33,6 +33,8 @@
 ---@field scrollBox table The Geyser.ScrollBox the list is built on.
 ---@field content table The Geyser.VBox holding the rows.
 ---@field selected table<string, boolean> The names of the selected rows.
+---@field childContainer table The container windows moved into the list go to: its content.
+---@field vendoredBy string? The package whose copy of the class this is, when it isn't Mudlet's.
 Geyser.List = {}
 
 --- Creates a new list.
@@ -99,7 +101,7 @@ function Geyser.List:getItemCount() end
 ---@return integer? index The position, from 1, or nil if it isn't in this list.
 function Geyser.List:indexOf(item) end
 
---- Deletes every row now, without consulting any `onDismiss` or telling `onSelectionChange`.
+--- Deletes every row now, without consulting any `onDismiss`.
 function Geyser.List:clear() end
 
 --- Dismisses every row: `dismiss()` for those that have it, `delete()` for those that don't.

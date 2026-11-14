@@ -754,8 +754,13 @@ function __PKGNAME__:Uninstall(event, name)
     -- The updater installs the new version in this same session. Left cached,
     -- require would hand back this Glu, with the old vendored code.
     package.loaded["__PKGNAME__/vendor/Glu-single"] = nil
-    Geyser.List = nil
-    Geyser.ListItem = nil
+    -- Only this package's copies: Mudlet's own, or another package's, stay.
+    if Geyser.List and rawget(Geyser.List, "vendoredBy") == "__PKGNAME__" then
+      Geyser.List = nil
+    end
+    if Geyser.ListItem and rawget(Geyser.ListItem, "vendoredBy") == "__PKGNAME__" then
+      Geyser.ListItem = nil
+    end
 
     cecho("\n<royal_blue>[__PKGNAME__]<r> You have uninstalled __PKGNAME__ __VERSION__.\n")
   end

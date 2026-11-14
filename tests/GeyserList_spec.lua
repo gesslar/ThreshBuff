@@ -223,6 +223,21 @@ describe("Tests functionality of Geyser.List", function()
       assert.are.equal(10, to.content:get_height())
     end)
 
+    it("moves a row's label into the other list's scroll box", function()
+      local from = newList("glFromBox")
+      local to = newList("glToBox", {x = 200, y = 150})
+      local item = row(from, "glBoxTraveller", 10)
+      -- Going to the list's content is Geyser:changeContainer's part, which older
+      -- Mudlets don't have. Without it, a container with only a childContainer is
+      -- refused and nothing moves; with it, this is changeContainer(to).
+      if not item:changeContainer({childContainer = to.content}) then
+        pending("this Mudlet's Geyser:changeContainer doesn't follow childContainer")
+        return
+      end
+      assert.are.equal("glToBox.ScrollBox", item.windowname)
+      assert.are.same({x = 0, y = 0, width = item:get_width(), height = 10}, geometry("glBoxTraveller"))
+    end)
+
     it("takes everything with it when deleted", function()
       local list = newList("glDelete")
       row(list, "glDeleteRow")
@@ -274,6 +289,17 @@ describe("Tests functionality of Geyser.List", function()
       row(list, "a", 10, {rank = 2})
       row(list, "b", 10, {rank = 1})
       assert.are.same({"b", "a"}, names(list))
+    end)
+
+    it("sortBy keeps rows that tie in the order they came", function()
+      local list = newList("glSortStable", {sortBy = function(a, b) return a.rank < b.rank end})
+      local expected = {}
+      for i = 1, 20 do
+        row(list, "glSortStable" .. i, 10, {rank = i % 2})
+      end
+      for i = 2, 20, 2 do expected[#expected + 1] = "glSortStable" .. i end
+      for i = 1, 20, 2 do expected[#expected + 1] = "glSortStable" .. i end
+      assert.are.same(expected, names(list))
     end)
 
     it("a sorted list refuses to move rows, and insertItem follows the sort", function()
@@ -339,6 +365,81 @@ describe("Tests functionality of Geyser.List", function()
       row(list, "a", 10)
       list:begin_update()
       list:clear()
+      assert.are.equal(10, list.content:get_height())
+      list:end_update()
+      assert.are.equal(1, list.content:get_height())
+    end)
+    it("places the rows once for each row added", function()
+      local list = newList("glOnePass")
+      local first = row(list, "a", 10)
+      row(list, "b", 10)
+      local placed = 0
+      local set = first.set_constraints
+      first.set_constraints = function(...)
+        placed = placed + 1
+        return set(...)
+      end
+      row(list, "c", 10)
+      assert.are.equal(1, placed)
+      assert.are.equal(20, geometry("c").y)
+    end)
+
+    it("dismissAll lays the list out once, after the rows are gone", function()
+      local list = newList("glDismissOnce")
+      for i = 1, 5 do
+        row(list, "glDismissOnce" .. i, 10)
+      end
+      local organized = 0
+      local organize = list.content.organize
+      list.content.organize = function(...)
+        organized = organized + 1
+        return organize(...)
+      end
+      list:dismissAll()
+      assert.are.equal(0, list:getItemCount())
+      assert.are.equal(1, list.content:get_height())
+      assert.are.equal(1, organized)
+    end)
+
+    it("dismissAll ends its update when an onDismiss raises", function()
+      local list = newList("glDismissRaise")
+      row(list, "a", 10, {onDismiss = function() error("boom") end})
+      assert.has_error(function() list:dismissAll() end)
+      assert.is_falsy(rawget(list, "defer_updates"))
+      row(list, "b", 10)
+      assert.are.equal(10, geometry("b").y)
+    end)
+
+    it("dismissAll lets an onDismiss yield, in a coroutine", function()
+      local list = newList("glDismissYield")
+      row(list, "a", 10, {onDismiss = function(_, done)
+        coroutine.yield("waiting")
+        done()
+      end})
+      local co = coroutine.create(function() list:dismissAll() end)
+      local ok, value = coroutine.resume(co)
+      assert.is_true(ok, value)
+      assert.are.equal("waiting", value)
+      assert.are.equal(1, list:getItemCount())
+      ok, value = coroutine.resume(co)
+      assert.is_true(ok, value)
+      assert.are.equal("dead", coroutine.status(co))
+      assert.are.equal(0, list:getItemCount())
+      assert.is_falsy(rawget(list, "defer_updates"))
+    end)
+
+    it("dismissAll ends its update when an onDismiss yields outside a coroutine", function()
+      local list = newList("glDismissNoCo")
+      row(list, "a", 10, {onDismiss = function() coroutine.yield() end})
+      assert.has_error(function() list:dismissAll() end)
+      assert.is_falsy(rawget(list, "defer_updates"))
+    end)
+
+    it("dismissAll doesn't end an update it didn't start", function()
+      local list = newList("glDismissDefer")
+      row(list, "a", 10)
+      list:begin_update()
+      list:dismissAll()
       assert.are.equal(10, list.content:get_height())
       list:end_update()
       assert.are.equal(1, list.content:get_height())
@@ -465,6 +566,20 @@ describe("Tests functionality of Geyser.List", function()
       assert.are.equal("", list:getItem("b").stylesheet or "")
     end)
 
+    it("go in a rule of their own when the item's stylesheet has rules", function()
+      local list = newList("glStripeRules", {stripes = {A}})
+      local own = "QLabel{color: white;} QLabel:hover{color: green;}"
+      row(list, "glStripeRulesRow", 10, {stylesheet = own})
+      assert.are.equal("QLabel{ " .. A .. " } " .. own, getLabelStyleSheet("glStripeRulesRow"))
+    end)
+
+    it("put the item's own in a rule when they have rules", function()
+      local stripe = "QLabel{background-color: red;}"
+      local list = newList("glStripeRuled", {stripes = {stripe}})
+      row(list, "glStripeRuledRow", 10, {stylesheet = "color: white;"})
+      assert.are.equal(stripe .. " QLabel{ color: white; }", getLabelStyleSheet("glStripeRuledRow"))
+    end)
+
     it("stay behind when a row moves to a list without them", function()
       local from = newList("glStripeFrom", {stripes = {A}})
       local to = newList("glStripeTo")
@@ -542,6 +657,43 @@ describe("Tests functionality of Geyser.List", function()
       }, calls)
     end)
 
+    it("doesn't select a row that onSelectionChange took away", function()
+      local calls = {}
+      local list
+      list = newList("glSelTaken", {selectionMode = "single", onSelectionChange = function(_, item, on)
+        calls[#calls + 1] = {item and item.name, on}
+        if item and item.name == "a" and not on then
+          list:getItem("b"):delete()
+        end
+      end})
+      local a = row(list, "a")
+      row(list, "b")
+      list:select(a)
+      local ok, err = list:select("b")
+      assert.is_nil(ok)
+      assert.is_string(err)
+      assert.are.same({}, selected(list))
+      assert.are.same({}, list.selected)
+      assert.are.same({{"a", true}, {"a", false}}, calls)
+    end)
+
+    it("keeps single mode to one row when onSelectionChange selects another", function()
+      local list
+      list = newList("glSelSwap", {selectionMode = "single", onSelectionChange = function(_, item, on)
+        if item.name == "a" and not on then
+          list:select("c")
+        end
+      end})
+      local a = row(list, "a")
+      row(list, "b")
+      row(list, "c")
+      list:select(a)
+      local ok, err = list:select("b")
+      assert.is_nil(ok)
+      assert.is_string(err)
+      assert.are.same({"c"}, selected(list))
+    end)
+
     it("leaves an item's own click callback alone", function()
       local list = newList("glSelOwn", {selectionMode = "single"})
       local own = function() end
@@ -563,6 +715,21 @@ describe("Tests functionality of Geyser.List", function()
       a:delete()
       assert.are.same({}, selected(list))
       assert.are.same({}, list.selected)
+    end)
+
+    it("tells onSelectionChange when a selected row goes", function()
+      local calls = {}
+      local list = newList("glSelDismiss", {selectionMode = "multi", onSelectionChange = function(_, item, on)
+        calls[#calls + 1] = {item.name, on}
+      end})
+      local a, b = row(list, "a"), row(list, "b")
+      row(list, "c")
+      list:select(a)
+      list:select(b)
+      calls = {}
+      a:dismiss()
+      list:dismissAll()
+      assert.are.same({{"a", false}, {"b", false}}, calls)
     end)
 
     it("clearSelection and toggle", function()
