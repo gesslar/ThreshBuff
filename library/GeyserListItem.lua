@@ -25,6 +25,8 @@
 ---@field stripe string? The stylesheet its list gave it.
 ---@field dismissing boolean? True once `dismiss()` has handed it to its `onDismiss`.
 ---@field deleted boolean? True once it has been deleted, for anything still working on it to check.
+---@field textReplaced boolean? True once raw text, an image or a movie has replaced what it last echoed.
+---@field vendoredBy string? The package whose copy of the class this is, when it isn't Mudlet's.
 ---@field onInsert fun(item: Geyser.ListItem)? Called with the item once it is built.
 ---@field onDismiss fun(item: Geyser.ListItem, done: fun())? What `dismiss()` consults.
 Geyser.ListItem = {}
@@ -100,6 +102,22 @@ function Geyser.ListItem:decho(message) end
 ---@return boolean? ok True, or nil and an error message if the label no longer exists.
 ---@return string? err The error message.
 function Geyser.ListItem:hecho(message) end
+
+--- Prints raw text to the item, as `Geyser.Label:rawEcho` does.
+---@param message string The text to print.
+function Geyser.ListItem:rawEcho(message) end
+
+--- Sets a background image, as `Geyser.Label:setBackgroundImage` does.
+---@param imageFileName string The image to show.
+---@return boolean? ok True, or nil and an error message.
+---@return string? err The error message.
+function Geyser.ListItem:setBackgroundImage(imageFileName) end
+
+--- Shows a movie, as `Geyser.Label:setMovie` does.
+---@param fileName string The movie to show.
+---@return boolean? ok True, or nil and an error message.
+---@return string? err The error message.
+function Geyser.ListItem:setMovie(fileName) end
 
 --- Resizes the item, and has its list fit a new height.
 ---@param width number|string? The new width constraint.
